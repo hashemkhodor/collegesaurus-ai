@@ -24,7 +24,7 @@ UI = {
     "en": {
         "display": "English",
         "page_title": "Collegesaurus AI",
-        "title": "🦕 Collegesaurus AI",
+        "title": "Collegesaurus AI",
         "caption": "Ask about universities and scholarships in Lebanon.",
         "language_label": "Language",
         "about_heading": "### About",
@@ -53,7 +53,7 @@ UI = {
     "ar": {
         "display": "العربية",
         "page_title": "Collegesaurus AI",
-        "title": "🦕 كوليجسورس الذكي",
+        "title": "كوليجسورس الذكي",
         "caption": "اسأل عن الجامعات والمنح في لبنان.",
         "language_label": "اللغة",
         "about_heading": "### عن التطبيق",
@@ -81,7 +81,7 @@ UI = {
     "auto": {
         "display": "Auto / تلقائي",
         "page_title": "Collegesaurus AI",
-        "title": "🦕 Collegesaurus AI",
+        "title": "Collegesaurus AI",
         "caption": "Ask about universities and scholarships in Lebanon. · "
                    "اسأل عن الجامعات والمنح في لبنان.",
         "language_label": "Language / اللغة",
@@ -118,7 +118,7 @@ LANG_OPTIONS = [("auto", UI["auto"]["display"]),
 
 st.set_page_config(
     page_title="Collegesaurus AI",
-    page_icon="🦕",
+    page_icon="static/logo.svg",
     layout="centered",
     initial_sidebar_state="expanded",
 )
@@ -190,6 +190,7 @@ def main() -> None:
     # Direction follows language: Arabic → RTL, everything else LTR.
     _apply_direction("rtl" if lang == "ar" else "ltr")
 
+    st.image("static/logo.svg", width=72)
     st.title(ui["title"])
     st.caption(ui["caption"])
 
