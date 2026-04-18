@@ -3,3 +3,15 @@ google-genai>=1.0,<2
 chromadb>=0.5,<0.6
 requests>=2.31
 python-dotenv>=1.0
+
+# --- Streamlit Cloud pin-downs ------------------------------------------------
+# Streamlit Cloud's uv resolver pairs protobuf 7.x with the old
+# opentelemetry-exporter-otlp-proto-grpc 1.11.x (whose pre-generated _pb2.py
+# files were built for protobuf 3). At import time protobuf 7 rejects them
+# with "Descriptors cannot be created directly." Force the matching pair
+# that already works locally.
+opentelemetry-api==1.41.0
+opentelemetry-sdk==1.41.0
+opentelemetry-proto==1.41.0
+opentelemetry-exporter-otlp-proto-grpc==1.41.0
+protobuf>=5,<7
