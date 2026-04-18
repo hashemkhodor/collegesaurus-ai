@@ -1,0 +1,17 @@
+# Lebanese-green theme to match the Docusaurus site.
+[theme]
+base = "light"
+primaryColor = "#00A651"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f5f7f6"
+textColor = "#1c1e21"
+font = "sans serif"
+
+[browser]
+gatherUsageStats = false
+
+[server]
+# Allow the app to be framed by the Docusaurus site.
+headless = true
+enableCORS = false
+enableXsrfProtection = false
