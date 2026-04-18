@@ -59,17 +59,21 @@ def _search(collection_name, query, top_k):
     metas = (res.get("metadatas") or [[]])[0]
     if not docs:
         return "No matches."
+    # Return the FULL chunk text — not a short excerpt. A 500-char cap was
+    # truncating long tables (e.g. MSFEA majors list) so the model only saw
+    # the first few rows. Gemini 2.5 Flash-Lite has a 1M-token window;
+    # 15 chunks x ~1 KB each is trivially cheap.
     lines = []
     for i, (doc, meta) in enumerate(zip(docs, metas), 1):
-        snippet = " ".join(doc.split())
-        if len(snippet) > 500:
-            snippet = snippet[:500] + "…"
         lines.append(
-            "[{}] {}\n  Source: {}\n  Excerpt: {}".format(
-                i, meta.get("title", "(untitled)"), meta.get("url", ""), snippet
+            "[{}] {}\nSource: {}\n{}".format(
+                i,
+                meta.get("title", "(untitled)"),
+                meta.get("url", ""),
+                doc.strip(),
             )
         )
-    return "\n\n".join(lines)
+    return "\n\n---\n\n".join(lines)
 
 
 def _list(collection_name, content_dir):

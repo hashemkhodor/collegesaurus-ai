@@ -29,10 +29,13 @@ dist/
 # Streamlit
 .streamlit/secrets.toml
 
-# Local data — rebuild via `python ingest.py`
-chroma_db/
+# Cached MDX pulled from the Docusaurus repo — rebuild via `python ingest.py`
 source_cache/
 .cache/
+
+# NOTE: chroma_db/ is checked in so Streamlit Community Cloud can serve it
+# without re-running ingestion on cold start. Rebuild + recommit after
+# content in the Docusaurus repo changes significantly.
 
 # Test / coverage
 .pytest_cache/

@@ -42,10 +42,17 @@ GEMINI_CHAT_MODEL = "gemini-2.5-flash-lite"
 GEMINI_EMBED_MODEL = "gemini-embedding-001"
 
 # Retrieval defaults.
-TOP_K = 5
+# TOP_K bumped from 5 to 15: list-style questions (e.g. "engineering majors
+# at AUB") need several chunks from the same table to return a complete
+# answer — otherwise the model only sees the first ~3 rows.
+TOP_K = 15
 CHUNK_SIZE = 1024
 CHUNK_OVERLAP = 128
 EMBED_BATCH_SIZE = 100  # items per embed_content API call
+
+# Cap on the model's reply length (tokens). 10k leaves plenty of room for
+# long majors tables or catalog listings; Flash-Lite's ceiling is 65,536.
+MAX_OUTPUT_TOKENS = 10000
 
 
 def require_api_key() -> str:
