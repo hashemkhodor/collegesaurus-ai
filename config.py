@@ -54,6 +54,16 @@ EMBED_BATCH_SIZE = 100  # items per embed_content API call
 # long majors tables or catalog listings; Flash-Lite's ceiling is 65,536.
 MAX_OUTPUT_TOKENS = 10000
 
+MAX_INPUT_CHARS = 1000
+RATE_LIMIT_WINDOW_SECONDS = 30
+RATE_LIMIT_MAX_PER_WINDOW = 10
+
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "") or os.environ.get(
+    "SUPABASE_ANON_KEY", ""
+)
+LOG_TABLE = "chat_logs"
+
 
 def require_api_key() -> str:
     """Return the Gemini API key or raise a helpful error."""
