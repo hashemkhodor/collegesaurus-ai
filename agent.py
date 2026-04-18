@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from llama_index.core import Settings
 from llama_index.core.agent import ReActAgent
-from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
+from llama_index.embeddings.fastembed import FastEmbedEmbedding
 from llama_index.llms.google_genai import GoogleGenAI
 
 import config
@@ -33,9 +33,9 @@ def build_agent() -> ReActAgent:
     api_key = config.require_api_key()
 
     llm = GoogleGenAI(model=config.GEMINI_CHAT_MODEL, api_key=api_key)
-    embed_model = GoogleGenAIEmbedding(
-        model_name=config.GEMINI_EMBED_MODEL, api_key=api_key
-    )
+    # Must match the embedder used at ingest time (see ingest.py) so query
+    # vectors land in the same space as document vectors.
+    embed_model = FastEmbedEmbedding(model_name=config.LOCAL_EMBED_MODEL)
 
     # Register globally so tools that instantiate indices pick them up.
     Settings.llm = llm

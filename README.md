@@ -6,8 +6,8 @@ Stack:
 - **Streamlit** for the chat UI
 - **LlamaIndex** `ReActAgent` for the agent loop
 - **ChromaDB** (embedded) for the vector store
-- **Gemini 2.0 Flash** for generation, **`text-embedding-004`** for embeddings — both free via Google AI Studio
-- **No torch, no HuggingFace downloads** — the whole thing installs in ~30 seconds
+- **Gemini 2.5 Flash-Lite** for generation (pay-as-you-go — ~$0.10 / 1M input, $0.40 / 1M output at time of writing)
+- **`BAAI/bge-small-en-v1.5`** via fastembed for embeddings (local ONNX, zero API cost, ~130 MB)
 
 ## Architecture
 
@@ -69,9 +69,9 @@ streamlit run app.py
    ```toml
    GEMINI_API_KEY = "your_key_here"
    ```
-4. First boot will fail because there's no index — SSH in (or run the "Run ingest" button if you add one) and execute `python ingest.py`. Alternatively, run `python ingest.py` locally and commit the resulting `chroma_db/` directory (small — a few MB for this dataset).
+4. First boot will fail because there's no index — commit the `chroma_db/` directory after running `python ingest.py` locally, or add a `scripts/build-index.sh` that runs it in the Streamlit Cloud container. The dataset is small (~2 MB of vectors), so committing the DB is the lowest-friction option.
 
-Cost at typical traffic: **$0/month**. Gemini 2.0 Flash has a generous free tier (1500 req/day as of writing), and Chroma is embedded.
+> **Billing**: Gemini 2.0 Flash-Lite is pay-as-you-go. Enable billing on the Google Cloud project tied to your API key (https://console.cloud.google.com/billing) — even the free tier requires a billing account now. Cost scales roughly at **$0.30 per 1,000 user messages** at typical RAG prompt sizes.
 
 ## Files
 

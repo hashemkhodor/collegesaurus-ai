@@ -15,7 +15,7 @@ import requests
 from llama_index.core import Settings, StorageContext, VectorStoreIndex
 from llama_index.core.node_parser import MarkdownNodeParser
 from llama_index.core.schema import Document
-from llama_index.embeddings.google_genai import GoogleGenAIEmbedding
+from llama_index.embeddings.fastembed import FastEmbedEmbedding
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
 import config
@@ -129,10 +129,9 @@ def build_index(content_dir: str, client: chromadb.PersistentClient) -> None:
 
 
 def main() -> int:
-    api_key = config.require_api_key()
-    Settings.embed_model = GoogleGenAIEmbedding(
-        model_name=config.GEMINI_EMBED_MODEL, api_key=api_key
-    )
+    # Ingestion uses only local embeddings — no API key required here. The
+    # Gemini key is only needed at chat time for the LLM (see agent.py).
+    Settings.embed_model = FastEmbedEmbedding(model_name=config.LOCAL_EMBED_MODEL)
     Settings.chunk_size = config.CHUNK_SIZE
     Settings.chunk_overlap = config.CHUNK_OVERLAP
 

@@ -39,8 +39,11 @@ COLLECTIONS = {
 }
 
 # Model names.
-GEMINI_CHAT_MODEL = "gemini-2.0-flash-001"
-GEMINI_EMBED_MODEL = "models/text-embedding-004"
+GEMINI_CHAT_MODEL = "gemini-2.5-flash-lite"
+# Local ONNX embedder via fastembed — no API calls, ~130MB one-time download,
+# excellent quality for English RAG. Avoids Gemini's 100-req/min free-tier cap
+# on embed_content which counts each text, not each request.
+LOCAL_EMBED_MODEL = "BAAI/bge-small-en-v1.5"
 
 # Retrieval defaults.
 TOP_K = 5
