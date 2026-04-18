@@ -21,13 +21,13 @@ def _get_client():
     global _client, _init_failed
     if _client is not None or _init_failed:
         return _client
-    if not config.SUPABASE_URL or not config.SUPABASE_ANON_KEY:
+    if not config.SUPABASE_URL or not config.SUPABASE_KEY:
         _init_failed = True
         return None
     try:
         from supabase import create_client
 
-        _client = create_client(config.SUPABASE_URL, config.SUPABASE_ANON_KEY)
+        _client = create_client(config.SUPABASE_URL, config.SUPABASE_KEY)
     except Exception as exc:
         print(f"[logging_store] supabase client init failed: {exc}", file=sys.stderr)
         _init_failed = True

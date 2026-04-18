@@ -59,7 +59,9 @@ RATE_LIMIT_WINDOW_SECONDS = 30
 RATE_LIMIT_MAX_PER_WINDOW = 10
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
-SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "") or os.environ.get(
+    "SUPABASE_ANON_KEY", ""
+)
 LOG_TABLE = "chat_logs"
 
 
