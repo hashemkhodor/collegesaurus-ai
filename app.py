@@ -13,7 +13,7 @@ from __future__ import annotations
 import streamlit as st
 
 import config
-from agent import build_agent
+from agent import build_chat
 
 st.set_page_config(
     page_title="Collegesaurus AI",
@@ -28,12 +28,7 @@ def _ensure_index_exists() -> bool:
     return config.CHROMA_DIR.exists() and any(config.CHROMA_DIR.iterdir())
 
 
-@st.cache_resource(show_spinner="Waking Collegesaurus up…")
-def get_agent():
-    return build_agent()
-
-
-def sidebar():
+def sidebar() -> None:
     with st.sidebar:
         st.markdown("### About")
         st.markdown(
@@ -50,6 +45,7 @@ def sidebar():
         )
         if st.button("Clear conversation", use_container_width=True):
             st.session_state.pop("messages", None)
+            st.session_state.pop("chat", None)
             st.rerun()
 
 
@@ -66,6 +62,8 @@ def main() -> None:
 
     sidebar()
 
+    if "chat" not in st.session_state:
+        st.session_state.chat = build_chat()
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
@@ -81,13 +79,10 @@ def main() -> None:
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    agent = get_agent()
     with st.chat_message("assistant"):
-        placeholder = st.empty()
         with st.spinner("Thinking…"):
-            response = agent.chat(prompt)
-        answer = str(response)
-        placeholder.markdown(answer)
+            answer = st.session_state.chat.send(prompt)
+        st.markdown(answer)
 
     st.session_state.messages.append({"role": "assistant", "content": answer})
 

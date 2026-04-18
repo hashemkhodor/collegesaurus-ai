@@ -1,108 +1,177 @@
-"""Agent tools. Each tool is a small, named function the ReAct loop can call.
+"""Agent tools — explicit JSON-schema declarations + executor registry.
 
-Design notes
-------------
-- Keep the surface narrow: the agent should have a couple of focused tools, not
-  one god-tool. This makes the reasoning trace readable and lets us measure
-  which tools actually get used.
-- Every tool returns a plain string. LlamaIndex will feed that string back into
-  the model's next turn.
-- Retrieval tools always include a source URL so the agent can cite it.
+Why not rely on the SDK's automatic function calling?
+-----------------------------------------------------
+The `google-genai` auto-declaration path introspects Python signatures and
+docstrings to build `FunctionDeclaration`s. Silent failures are possible
+(e.g., `from __future__ import annotations` turning type hints into strings),
+and when declaration fails the tool is simply dropped — the model then
+reports "no tool available" and we have no hook to fix it. Declaring schemas
+by hand is more verbose but leaves nothing to chance: what you write here is
+exactly what the model sees.
 """
 
-from __future__ import annotations
-
 import chromadb
-from llama_index.core import Settings, VectorStoreIndex
-from llama_index.core.tools import FunctionTool
-from llama_index.vector_stores.chroma import ChromaVectorStore
+from google import genai
+from google.genai import types
 
 import config
 
 
-def _load_retriever(collection_name: str, top_k: int = config.TOP_K):
-    client = chromadb.PersistentClient(path=str(config.CHROMA_DIR))
-    collection = client.get_collection(collection_name)
-    vector_store = ChromaVectorStore(chroma_collection=collection)
-    index = VectorStoreIndex.from_vector_store(vector_store)
-    return index.as_retriever(similarity_top_k=top_k)
+# ---------------------------------------------------------------------------
+# Clients
+# ---------------------------------------------------------------------------
+
+# Module-level Gemini client so its underlying httpx pool stays alive.
+# Constructing the Client inside a function call occasionally left the pool
+# torn down before the first request, raising "Cannot send a request, as the
+# client has been closed". Eager construction sidesteps that entirely.
+_GEMINI = genai.Client(api_key=config.require_api_key())
+
+_chroma_client = None
 
 
-def _format_hits(hits) -> str:
-    if not hits:
+def _chroma():
+    global _chroma_client
+    if _chroma_client is None:
+        _chroma_client = chromadb.PersistentClient(path=str(config.CHROMA_DIR))
+    return _chroma_client
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _embed_query(text):
+    result = _GEMINI.models.embed_content(
+        model=config.GEMINI_EMBED_MODEL,
+        contents=[text],
+        config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY"),
+    )
+    return result.embeddings[0].values
+
+
+def _search(collection_name, query, top_k):
+    collection = _chroma().get_collection(collection_name)
+    qvec = _embed_query(query)
+    res = collection.query(query_embeddings=[qvec], n_results=top_k)
+    docs = (res.get("documents") or [[]])[0]
+    metas = (res.get("metadatas") or [[]])[0]
+    if not docs:
         return "No matches."
     lines = []
-    for i, node in enumerate(hits, 1):
-        meta = node.metadata or {}
-        title = meta.get("title", "(untitled)")
-        url = meta.get("url", "")
-        snippet = node.get_content().strip().replace("\n", " ")
+    for i, (doc, meta) in enumerate(zip(docs, metas), 1):
+        snippet = " ".join(doc.split())
         if len(snippet) > 500:
             snippet = snippet[:500] + "…"
-        lines.append(f"[{i}] {title}\n  Source: {url}\n  Excerpt: {snippet}")
+        lines.append(
+            "[{}] {}\n  Source: {}\n  Excerpt: {}".format(
+                i, meta.get("title", "(untitled)"), meta.get("url", ""), snippet
+            )
+        )
     return "\n\n".join(lines)
 
 
-def search_universities(query: str) -> str:
-    """Search the Lebanese-universities knowledge base.
-
-    Returns top matches with title, source URL, and an excerpt. Use for
-    questions about specific schools (AUB, LAU, USJ, etc.), their majors,
-    tuition, admissions requirements, or contacts.
-    """
-    retriever = _load_retriever(config.COLLECTIONS["universities"])
-    return _format_hits(retriever.retrieve(query))
-
-
-def search_scholarships(query: str) -> str:
-    """Search the external-scholarships knowledge base.
-
-    Returns top matches with title, source URL, and an excerpt. Use for
-    questions about specific scholarships (Fulbright, USAID USP, LIFE, etc.),
-    eligibility, deadlines, benefits, or how to apply.
-    """
-    retriever = _load_retriever(config.COLLECTIONS["scholarships"])
-    return _format_hits(retriever.retrieve(query))
-
-
-def _list_collection(collection_name: str, content_dir: str) -> str:
-    client = chromadb.PersistentClient(path=str(config.CHROMA_DIR))
-    collection = client.get_collection(collection_name)
-    # Chroma has no .distinct() — pull metadata in one batch and dedupe by slug.
+def _list(collection_name, content_dir):
+    collection = _chroma().get_collection(collection_name)
     result = collection.get(include=["metadatas"])
-    seen: dict[str, str] = {}
+    seen = {}
     for meta in result.get("metadatas") or []:
         slug = meta.get("slug")
         if slug and slug not in seen:
             seen[slug] = meta.get("title", slug)
     if not seen:
-        return f"No {content_dir} indexed yet."
-    lines = [f"- {title} ({config.SITE_BASE_URL}/{content_dir}/{slug})"
-             for slug, title in sorted(seen.items())]
-    return "\n".join(lines)
+        return "No {} indexed yet.".format(content_dir)
+    return "\n".join(
+        "- {} ({}/{})".format(title, config.SITE_BASE_URL + "/" + content_dir, slug)
+        for slug, title in sorted(seen.items())
+    )
 
 
-def list_universities() -> str:
-    """List every university we have a page for, with its site URL.
+# ---------------------------------------------------------------------------
+# Tool functions (callable by the executor)
+# ---------------------------------------------------------------------------
 
-    Use when the user asks "what schools do you have?" or "list all unis".
-    """
-    return _list_collection(config.COLLECTIONS["universities"], "universities")
-
-
-def list_scholarships() -> str:
-    """List every scholarship we have a page for, with its site URL.
-
-    Use when the user asks "what scholarships are available?".
-    """
-    return _list_collection(config.COLLECTIONS["scholarships"], "scholarships")
+def search_universities(query):
+    return _search(config.COLLECTIONS["universities"], query, config.TOP_K)
 
 
-def build_tools() -> list[FunctionTool]:
-    """Wrap each tool for LlamaIndex. Docstrings become tool descriptions."""
-    return [
-        FunctionTool.from_defaults(fn=search_universities),
-        FunctionTool.from_defaults(fn=search_scholarships),
-        FunctionTool.from_defaults(fn=list_universities),
-        FunctionTool.from_defaults(fn=list_scholarships),
-    ]
+def search_scholarships(query):
+    return _search(config.COLLECTIONS["scholarships"], query, config.TOP_K)
+
+
+def list_universities():
+    return _list(config.COLLECTIONS["universities"], "universities")
+
+
+def list_scholarships():
+    return _list(config.COLLECTIONS["scholarships"], "scholarships")
+
+
+# ---------------------------------------------------------------------------
+# Explicit FunctionDeclarations. The model sees exactly this.
+# ---------------------------------------------------------------------------
+
+_QUERY_PARAM = types.Schema(
+    type=types.Type.OBJECT,
+    properties={
+        "query": types.Schema(
+            type=types.Type.STRING,
+            description="Natural-language search query.",
+        ),
+    },
+    required=["query"],
+)
+
+_NO_PARAMS = types.Schema(type=types.Type.OBJECT, properties={})
+
+TOOL_DECLARATIONS = [
+    types.FunctionDeclaration(
+        name="search_universities",
+        description=(
+            "Search the Lebanese-universities knowledge base. Use for "
+            "questions about specific schools (AUB, LAU, USJ, etc.), their "
+            "majors, tuition, admissions requirements, or contacts. Returns "
+            "up to 5 ranked matches, each with a title, source URL, and "
+            "excerpt."
+        ),
+        parameters=_QUERY_PARAM,
+    ),
+    types.FunctionDeclaration(
+        name="search_scholarships",
+        description=(
+            "Search the external-scholarships knowledge base. Use for "
+            "questions about specific scholarships (Fulbright, USAID USP, "
+            "LIFE, etc.), eligibility, deadlines, benefits, or how to apply. "
+            "Returns up to 5 ranked matches, each with a title, source URL, "
+            "and excerpt."
+        ),
+        parameters=_QUERY_PARAM,
+    ),
+    types.FunctionDeclaration(
+        name="list_universities",
+        description=(
+            "List every Lebanese university we have a page for, with its "
+            "site URL. Use when the user wants the catalog or asks what "
+            "schools are available."
+        ),
+        parameters=_NO_PARAMS,
+    ),
+    types.FunctionDeclaration(
+        name="list_scholarships",
+        description=(
+            "List every scholarship we have a page for, with its site URL. "
+            "Use when the user asks what scholarships are available."
+        ),
+        parameters=_NO_PARAMS,
+    ),
+]
+
+
+# Name → callable dispatch table used by the agent's tool-call loop.
+TOOL_REGISTRY = {
+    "search_universities": search_universities,
+    "search_scholarships": search_scholarships,
+    "list_universities": list_universities,
+    "list_scholarships": list_scholarships,
+}

@@ -28,8 +28,7 @@ SITE_BASE_URL = "https://hashemkhodor.github.io/collegesaurus"
 # Directories in the source repo we ingest. Keep in sync with docusaurus.config.ts.
 CONTENT_DIRS = ("universities", "scholarships")
 
-# Files we skip (templates, intros — the intro is already in the UI, not helpful
-# as retrieval context).
+# Files we skip (templates, intros).
 SKIP_FILES = {"_template.mdx", "intro.mdx"}
 
 # Chroma collection names (one per content type — lets the agent target either).
@@ -38,17 +37,15 @@ COLLECTIONS = {
     "scholarships": "scholarships",
 }
 
-# Model names.
+# Gemini model names.
 GEMINI_CHAT_MODEL = "gemini-2.5-flash-lite"
-# Local ONNX embedder via fastembed — no API calls, ~130MB one-time download,
-# excellent quality for English RAG. Avoids Gemini's 100-req/min free-tier cap
-# on embed_content which counts each text, not each request.
-LOCAL_EMBED_MODEL = "BAAI/bge-small-en-v1.5"
+GEMINI_EMBED_MODEL = "gemini-embedding-001"
 
 # Retrieval defaults.
 TOP_K = 5
 CHUNK_SIZE = 1024
 CHUNK_OVERLAP = 128
+EMBED_BATCH_SIZE = 100  # items per embed_content API call
 
 
 def require_api_key() -> str:
