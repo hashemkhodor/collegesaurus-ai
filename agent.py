@@ -17,6 +17,9 @@ Loop shape
 4. Cap at MAX_STEPS so a misbehaving model can't spin forever.
 """
 
+import time
+from dataclasses import dataclass, field
+
 from google import genai
 from google.genai import types
 
@@ -24,7 +27,15 @@ import config
 from tools import TOOL_DECLARATIONS, TOOL_REGISTRY, _GEMINI
 
 
-SYSTEM_PROMPT = (
+@dataclass
+class ChatResult:
+    answer: str
+    tool_calls: list[str] = field(default_factory=list)
+    latency_ms: int = 0
+    error: str | None = None
+
+
+BASE_SYSTEM_PROMPT = (
     "You are Collegesaurus, an assistant that helps Lebanese high-school "
     "students (and their parents) choose a university or find a scholarship.\n"
     "\n"
@@ -41,20 +52,42 @@ SYSTEM_PROMPT = (
     "can help with.\n"
     "5. Prefer concise, structured answers: short paragraphs, bullet lists "
     "for options, bold key numbers (deadlines, costs).\n"
-    "6. Reply in the language the user wrote in (English or Arabic)."
+    "6. When the user asks for a list (majors, programs, scholarships, "
+    "universities), return EVERY item you found in the tool output — don't "
+    "truncate or summarize the list down. If your first tool call looks "
+    "incomplete, issue a second, more specific search to fill in the gaps."
 )
+
+_LANG_INSTRUCTIONS = {
+    "en": "\n7. Reply in clear, conversational English.",
+    "ar": (
+        "\n7. أجب باللغة العربية الفصحى دائمًا، حتى لو كتب المستخدم بالإنكليزية. "
+        "أسماء البرامج والمواقع يمكن تركها كما هي باللغة الأصلية."
+    ),
+    "auto": (
+        "\n7. Reply in the language the user wrote in (English or Arabic). "
+        "If they mix languages, follow the dominant one in their latest "
+        "message."
+    ),
+}
+
 
 MAX_STEPS = 6
 
 
-def _tool_config():
+def _system_prompt(lang: str) -> str:
+    return BASE_SYSTEM_PROMPT + _LANG_INSTRUCTIONS.get(lang, _LANG_INSTRUCTIONS["auto"])
+
+
+def _tool_config(lang: str):
     return types.GenerateContentConfig(
         tools=[types.Tool(function_declarations=TOOL_DECLARATIONS)],
         automatic_function_calling=types.AutomaticFunctionCallingConfig(
             disable=True
         ),
-        system_instruction=SYSTEM_PROMPT,
+        system_instruction=_system_prompt(lang),
         temperature=0.3,
+        max_output_tokens=config.MAX_OUTPUT_TOKENS,
     )
 
 
@@ -79,56 +112,76 @@ class ChatSession:
     """Thin session holding conversation history between turns.
 
     Stateless across Streamlit reruns — we just keep the list of Content
-    objects and replay them each call.
+    objects and replay them each call. `lang` is baked into the system
+    prompt so the model knows which language to reply in.
     """
 
-    def __init__(self):
+    def __init__(self, lang: str = "auto"):
         self.history: list[types.Content] = []
+        self.lang = lang
 
     def reset(self):
         self.history = []
 
-    def send(self, user_text: str) -> str:
+    def send(self, user_text: str) -> ChatResult:
         self.history.append(
             types.Content(
                 role="user",
                 parts=[types.Part.from_text(text=user_text)],
             )
         )
-        cfg = _tool_config()
+        cfg = _tool_config(self.lang)
+        tool_calls: list[str] = []
+        start = time.perf_counter()
 
-        for _ in range(MAX_STEPS):
-            resp = _GEMINI.models.generate_content(
-                model=config.GEMINI_CHAT_MODEL,
-                contents=self.history,
-                config=cfg,
-            )
-            candidate = resp.candidates[0]
-            self.history.append(candidate.content)
-
-            fn_calls = [
-                p.function_call
-                for p in (candidate.content.parts or [])
-                if p.function_call
-            ]
-            if not fn_calls:
-                # Plain text answer — we're done.
-                return resp.text or "(empty response)"
-
-            # Execute each requested tool and return the results in a single
-            # user-role Content before looping.
-            self.history.append(
-                types.Content(
-                    role="user",
-                    parts=[_execute_call(fc) for fc in fn_calls],
+        try:
+            for _ in range(MAX_STEPS):
+                resp = _GEMINI.models.generate_content(
+                    model=config.GEMINI_CHAT_MODEL,
+                    contents=self.history,
+                    config=cfg,
                 )
+                candidate = resp.candidates[0]
+                self.history.append(candidate.content)
+
+                fn_calls = [
+                    p.function_call
+                    for p in (candidate.content.parts or [])
+                    if p.function_call
+                ]
+                if not fn_calls:
+                    return ChatResult(
+                        answer=resp.text or "(empty response)",
+                        tool_calls=tool_calls,
+                        latency_ms=int((time.perf_counter() - start) * 1000),
+                    )
+
+                for fc in fn_calls:
+                    tool_calls.append(fc.name)
+                self.history.append(
+                    types.Content(
+                        role="user",
+                        parts=[_execute_call(fc) for fc in fn_calls],
+                    )
+                )
+
+            return ChatResult(
+                answer=(
+                    "(stopped after {} tool steps without a final answer)"
+                ).format(MAX_STEPS),
+                tool_calls=tool_calls,
+                latency_ms=int((time.perf_counter() - start) * 1000),
+                error="max_steps_exceeded",
+            )
+        except Exception as exc:
+            return ChatResult(
+                answer="Something went wrong. Please try again.",
+                tool_calls=tool_calls,
+                latency_ms=int((time.perf_counter() - start) * 1000),
+                error=str(exc),
             )
 
-        return "(stopped after {} tool steps without a final answer)".format(
-            MAX_STEPS
-        )
 
-
-def build_chat() -> ChatSession:
+def build_chat(lang: str = "auto") -> ChatSession:
     """Public constructor so app.py doesn't import the class name directly."""
-    return ChatSession()
+    return ChatSession(lang=lang)
