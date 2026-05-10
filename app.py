@@ -6,6 +6,7 @@ Run locally:
 
 from __future__ import annotations
 
+import ipaddress
 import secrets
 import time
 
@@ -152,19 +153,49 @@ def _ensure_index_exists() -> bool:
     return config.CHROMA_DIR.exists() and any(config.CHROMA_DIR.iterdir())
 
 
+def _first_public_ip(xff: str) -> str:
+    """Return the first publicly-routable IP from an X-Forwarded-For string.
+
+    Walks XFF left-to-right and skips private / loopback / link-local
+    ranges, so we end up with the real client whether the proxy prepends
+    or appends, or with "" if no public IP is in the chain.
+
+    Note on Streamlit Community Cloud (as of Streamlit 1.56): the edge
+    does NOT pass the original client IP through XFF or X-Real-IP —
+    upstream's Tornado server is started without xheaders=True
+    (streamlit/streamlit#12005), so the only IP visible to the app is
+    Streamlit's internal LB (a 192.168.x.x). On Cloud this function
+    will therefore return "" most of the time. Self-hosted deployments
+    behind a normal reverse proxy populate XFF correctly. Re-evaluate
+    in Streamlit 1.57+ which migrates to Starlette and may fix this.
+    """
+    for raw in xff.split(","):
+        candidate = raw.strip()
+        if not candidate:
+            continue
+        try:
+            ip_obj = ipaddress.ip_address(candidate)
+        except ValueError:
+            continue
+        if ip_obj.is_global:
+            return candidate
+    return ""
+
+
 def _client_meta() -> tuple[str, str]:
     """Return (ip, user_agent) from the current request headers.
 
-    On Streamlit Cloud, X-Forwarded-For is "<client>, <proxy1>, ..." — the
-    first entry is the real client. Locally the header is absent, so we
-    return "".
+    Locally the X-Forwarded-For header is absent, so ip stays "".
     """
     try:
         headers = st.context.headers or {}
     except Exception:
         return "", ""
     xff = headers.get("X-Forwarded-For", "") or headers.get("x-forwarded-for", "")
-    ip = xff.split(",", 1)[0].strip() if xff else ""
+    ip = _first_public_ip(xff)
+    if not ip:
+        # Some proxies expose the real client via X-Real-IP instead.
+        ip = headers.get("X-Real-IP", "") or headers.get("x-real-ip", "")
     ua = headers.get("User-Agent", "") or headers.get("user-agent", "")
     return ip, ua
 
