@@ -12,7 +12,7 @@ import time
 import streamlit as st
 
 import config
-from agent import build_chat
+from agent import UPSTREAM_BUSY_SENTINEL, build_chat
 from logging_store import log_turn
 
 
@@ -49,6 +49,9 @@ UI = {
         ),
         "input_too_long": "Question too long — keep it under {max} characters.",
         "rate_limited": "Too many questions too fast — try again in 30 seconds.",
+        "upstream_busy": (
+            "The model is busy right now — please try again in a few seconds."
+        ),
     },
     "ar": {
         "display": "العربية",
@@ -77,6 +80,7 @@ UI = {
         ),
         "input_too_long": "السؤال طويل جدًا — أبقه ضمن {max} حرفًا.",
         "rate_limited": "أسئلة كثيرة خلال وقت قصير — حاول بعد 30 ثانية.",
+        "upstream_busy": "النموذج مشغول حاليًا — يُرجى المحاولة بعد لحظات.",
     },
     "auto": {
         "display": "Auto / تلقائي",
@@ -107,6 +111,10 @@ UI = {
         ),
         "input_too_long": "Question too long — keep it under {max} characters.",
         "rate_limited": "Too many questions too fast — try again in 30 seconds.",
+        "upstream_busy": (
+            "The model is busy right now — please try again in a few seconds. · "
+            "النموذج مشغول حاليًا — حاول بعد لحظات."
+        ),
     },
 }
 
@@ -142,6 +150,23 @@ def _apply_direction(direction: str) -> None:
 def _ensure_index_exists() -> bool:
     """Return True if the Chroma directory looks populated."""
     return config.CHROMA_DIR.exists() and any(config.CHROMA_DIR.iterdir())
+
+
+def _client_meta() -> tuple[str, str]:
+    """Return (ip, user_agent) from the current request headers.
+
+    On Streamlit Cloud, X-Forwarded-For is "<client>, <proxy1>, ..." — the
+    first entry is the real client. Locally the header is absent, so we
+    return "".
+    """
+    try:
+        headers = st.context.headers or {}
+    except Exception:
+        return "", ""
+    xff = headers.get("X-Forwarded-For", "") or headers.get("x-forwarded-for", "")
+    ip = xff.split(",", 1)[0].strip() if xff else ""
+    ua = headers.get("User-Agent", "") or headers.get("user-agent", "")
+    return ip, ua
 
 
 def _reset_chat(lang: str) -> None:
@@ -240,18 +265,26 @@ def main() -> None:
     with st.chat_message("assistant"):
         with st.spinner(ui["thinking"]):
             result = st.session_state.chat.send(prompt)
-        st.markdown(result.answer)
+        display_answer = (
+            ui["upstream_busy"]
+            if result.answer == UPSTREAM_BUSY_SENTINEL
+            else result.answer
+        )
+        st.markdown(display_answer)
 
-    st.session_state.messages.append({"role": "assistant", "content": result.answer})
+    st.session_state.messages.append({"role": "assistant", "content": display_answer})
 
+    ip, user_agent = _client_meta()
     log_turn(
         session_id=st.session_state.session_id,
         lang=lang,
         question=prompt,
-        answer=result.answer,
+        answer=display_answer,
         tool_calls=result.tool_calls,
         latency_ms=result.latency_ms,
         error=result.error,
+        ip=ip,
+        user_agent=user_agent,
     )
 
 
