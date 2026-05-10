@@ -34,6 +34,14 @@ RAW_URL = "https://raw.githubusercontent.com/{repo}/{branch}/{path}"
 
 def list_mdx_files(content_dir: str) -> list[str]:
     """Return slugs (filenames without .mdx) for every file in the directory."""
+    if config.LOCAL_MDX_DIR:
+        local = Path(config.LOCAL_MDX_DIR) / content_dir
+        if not local.exists():
+            return []
+        return sorted(
+            p.stem for p in local.glob("*.mdx") if p.name not in config.SKIP_FILES
+        )
+
     url = GITHUB_API.format(
         repo=config.SOURCE_REPO, branch=config.SOURCE_BRANCH, path=content_dir
     )
@@ -50,6 +58,11 @@ def list_mdx_files(content_dir: str) -> list[str]:
 
 def fetch_file(content_dir: str, slug: str) -> str:
     """Return raw MDX text, caching to disk so re-runs are fast."""
+    if config.LOCAL_MDX_DIR:
+        return (
+            Path(config.LOCAL_MDX_DIR) / content_dir / f"{slug}.mdx"
+        ).read_text(encoding="utf-8")
+
     cache_dir = config.SOURCE_CACHE_DIR / content_dir
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_path = cache_dir / f"{slug}.mdx"
