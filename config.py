@@ -22,6 +22,14 @@ SOURCE_CACHE_DIR = REPO_ROOT / "source_cache"
 SOURCE_REPO = os.environ.get("SOURCE_REPO", "hashemkhodor/collegesaurus")
 SOURCE_BRANCH = os.environ.get("SOURCE_BRANCH", "main")
 
+# When set, ingest.py reads MDX from this local directory (expected layout:
+# <dir>/universities/<slug>.mdx, <dir>/scholarships/<slug>.mdx) instead of
+# fetching from the upstream GitHub repo. Used because upstream main no
+# longer commits generated MDX — it's emitted at build time by the
+# drive_sync Python module from the docx/xlsx in .drive-cache. The local
+# mode lets us run drive_sync, point ingest.py at its output, and embed.
+LOCAL_MDX_DIR = os.environ.get("LOCAL_MDX_DIR", "")
+
 # Docusaurus routes. Used to generate citation URLs back to the live site.
 SITE_BASE_URL = "https://hashemkhodor.github.io/collegesaurus"
 
