@@ -42,6 +42,8 @@ def log_turn(
     tool_calls: list[str],
     latency_ms: int,
     error: Optional[str] = None,
+    ip: str = "",
+    user_agent: str = "",
 ) -> None:
     client = _get_client()
     if client is None:
@@ -56,6 +58,8 @@ def log_turn(
                 "tool_calls": tool_calls,
                 "latency_ms": latency_ms,
                 "error": error,
+                "ip": ip,
+                "user_agent": user_agent,
             }
         ).execute()
     except Exception as exc:

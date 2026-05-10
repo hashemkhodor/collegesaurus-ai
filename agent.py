@@ -21,6 +21,7 @@ import time
 from dataclasses import dataclass, field
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 
 import config
@@ -74,6 +75,12 @@ _LANG_INSTRUCTIONS = {
 
 MAX_STEPS = 6
 
+# Gemini occasionally returns 503 ("model is currently experiencing high
+# demand") or 429. Retry the model call once after a short pause; if it
+# still fails, surface a friendlier message instead of the raw exception.
+_RETRYABLE_CODES = {429, 503}
+_RETRY_BACKOFF_SECONDS = 1.5
+
 
 def _system_prompt(lang: str) -> str:
     return BASE_SYSTEM_PROMPT + _LANG_INSTRUCTIONS.get(lang, _LANG_INSTRUCTIONS["auto"])
@@ -89,6 +96,30 @@ def _tool_config(lang: str):
         temperature=0.3,
         max_output_tokens=config.MAX_OUTPUT_TOKENS,
     )
+
+
+def _generate_with_retry(history, cfg):
+    """Call generate_content with a single retry on 5xx/429 spikes."""
+    try:
+        return _GEMINI.models.generate_content(
+            model=config.GEMINI_CHAT_MODEL,
+            contents=history,
+            config=cfg,
+        )
+    except genai_errors.APIError as exc:
+        if exc.code not in _RETRYABLE_CODES:
+            raise
+        time.sleep(_RETRY_BACKOFF_SECONDS)
+        return _GEMINI.models.generate_content(
+            model=config.GEMINI_CHAT_MODEL,
+            contents=history,
+            config=cfg,
+        )
+
+
+# Sentinel returned in ChatResult.answer when both attempts at the model
+# call hit a retryable code. app.py swaps this for a localized message.
+UPSTREAM_BUSY_SENTINEL = "__upstream_busy__"
 
 
 def _execute_call(fc):
@@ -136,11 +167,17 @@ class ChatSession:
 
         try:
             for _ in range(MAX_STEPS):
-                resp = _GEMINI.models.generate_content(
-                    model=config.GEMINI_CHAT_MODEL,
-                    contents=self.history,
-                    config=cfg,
-                )
+                try:
+                    resp = _generate_with_retry(self.history, cfg)
+                except genai_errors.APIError as exc:
+                    if exc.code in _RETRYABLE_CODES:
+                        return ChatResult(
+                            answer=UPSTREAM_BUSY_SENTINEL,
+                            tool_calls=tool_calls,
+                            latency_ms=int((time.perf_counter() - start) * 1000),
+                            error=f"upstream_busy_{exc.code}",
+                        )
+                    raise
                 candidate = resp.candidates[0]
                 self.history.append(candidate.content)
 
