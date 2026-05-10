@@ -13,7 +13,7 @@ import time
 import streamlit as st
 
 import config
-from agent import UPSTREAM_BUSY_SENTINEL, build_chat
+from agent import OUT_OF_SCOPE_SENTINEL, UPSTREAM_BUSY_SENTINEL, build_chat
 from logging_store import log_turn
 
 
@@ -53,6 +53,11 @@ UI = {
         "upstream_busy": (
             "The model is busy right now — please try again in a few seconds."
         ),
+        "out_of_scope": (
+            "I can only help with Lebanese universities and the scholarships "
+            "in our dataset. Try asking about a major, university, or "
+            "scholarship."
+        ),
     },
     "ar": {
         "display": "العربية",
@@ -82,6 +87,10 @@ UI = {
         "input_too_long": "السؤال طويل جدًا — أبقه ضمن {max} حرفًا.",
         "rate_limited": "أسئلة كثيرة خلال وقت قصير — حاول بعد 30 ثانية.",
         "upstream_busy": "النموذج مشغول حاليًا — يُرجى المحاولة بعد لحظات.",
+        "out_of_scope": (
+            "أستطيع المساعدة فقط في الجامعات اللبنانية والمنح ضمن قاعدة "
+            "بياناتنا. اسأل عن تخصّص أو جامعة أو منحة."
+        ),
     },
     "auto": {
         "display": "Auto / تلقائي",
@@ -115,6 +124,11 @@ UI = {
         "upstream_busy": (
             "The model is busy right now — please try again in a few seconds. · "
             "النموذج مشغول حاليًا — حاول بعد لحظات."
+        ),
+        "out_of_scope": (
+            "I can only help with Lebanese universities and scholarships in "
+            "our dataset. · أستطيع المساعدة فقط في الجامعات اللبنانية والمنح "
+            "ضمن قاعدة بياناتنا."
         ),
     },
 }
@@ -296,11 +310,12 @@ def main() -> None:
     with st.chat_message("assistant"):
         with st.spinner(ui["thinking"]):
             result = st.session_state.chat.send(prompt)
-        display_answer = (
-            ui["upstream_busy"]
-            if result.answer == UPSTREAM_BUSY_SENTINEL
-            else result.answer
-        )
+        if result.answer == UPSTREAM_BUSY_SENTINEL:
+            display_answer = ui["upstream_busy"]
+        elif result.answer.strip() == OUT_OF_SCOPE_SENTINEL:
+            display_answer = ui["out_of_scope"]
+        else:
+            display_answer = result.answer
         st.markdown(display_answer)
 
     st.session_state.messages.append({"role": "assistant", "content": display_answer})

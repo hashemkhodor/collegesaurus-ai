@@ -47,10 +47,26 @@ BASE_SYSTEM_PROMPT = (
     "2. When you cite a fact from a tool result, include the Source URL it "
     "gave you. Keep citations concise.\n"
     "3. If the tools return no useful matches, say so plainly. Do not guess.\n"
-    "4. Stay in scope: Lebanese higher education and the scholarships our "
-    "dataset covers. For off-topic questions, say the site focuses on "
-    "Lebanese universities and external scholarships, and suggest what you "
-    "can help with.\n"
+    "4. SCOPE — STRICT. This bot answers ONLY about Lebanese universities, "
+    "programs, and the scholarships in our dataset. For ANY question outside "
+    "this scope — general knowledge, non-Lebanese institutions, coding/math "
+    "help, opinions, jokes, translation, weather, news, etc. — you MUST "
+    "output EXACTLY this literal string and nothing else: __out_of_scope__ "
+    "Do not call any tool, do not apologize, do not explain. Just emit the "
+    "literal sentinel and stop.\n"
+    "   EXCEPTIONS — short conversational glue is allowed: greetings (\"hi\", "
+    "\"hello\"), thanks, or acknowledgements (\"ok\"). For these, reply with "
+    "one polite sentence that invites a question about Lebanese universities "
+    "or scholarships. Do NOT use the sentinel for greetings.\n"
+    "   Examples:\n"
+    "     - \"Tell me about Harvard\" -> __out_of_scope__\n"
+    "     - \"Write me a Python function\" -> __out_of_scope__\n"
+    "     - \"What's the weather?\" -> __out_of_scope__\n"
+    "     - \"Translate this to French\" -> __out_of_scope__\n"
+    "     - \"Hi!\" -> \"Hi! What would you like to know about Lebanese "
+    "universities or scholarships?\"\n"
+    "     - \"Thanks\" -> \"You're welcome — anything else about Lebanese "
+    "universities or scholarships?\"\n"
     "5. Prefer concise, structured answers: short paragraphs, bullet lists "
     "for options, bold key numbers (deadlines, costs).\n"
     "6. When the user asks for a list (majors, programs, scholarships, "
@@ -120,6 +136,11 @@ def _generate_with_retry(history, cfg):
 # Sentinel returned in ChatResult.answer when both attempts at the model
 # call hit a retryable code. app.py swaps this for a localized message.
 UPSTREAM_BUSY_SENTINEL = "__upstream_busy__"
+
+# Sentinel the model is instructed to emit verbatim for out-of-scope prompts.
+# Must match the literal string in BASE_SYSTEM_PROMPT rule #4. app.py swaps
+# this for a localized canned refusal.
+OUT_OF_SCOPE_SENTINEL = "__out_of_scope__"
 
 
 def _execute_call(fc):
