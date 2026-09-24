@@ -16,6 +16,9 @@
   const MAX_CHARS = 1000;
   const MAX_HISTORY = 20;
   const MAX_ANSWER_CHARS = 4000;
+  // The server accepts 32 KB; send the newest turns that fit in 24 KB
+  // (Arabic takes two bytes per character).
+  const HISTORY_BYTES = 24 * 1024;
   const STORE_KEY = "collegesaurus-chat";
 
   const STRINGS = {
@@ -47,6 +50,7 @@
       notHelpful: "Not helpful",
       thanks: "Thanks for the feedback",
       retry: "Try again",
+      interrupted: "The answer was interrupted.",
       network: "Couldn't reach the assistant. Check your connection and try again.",
       tooLong: "Keep your question under {max} characters.",
     },
@@ -77,6 +81,7 @@
       notHelpful: "غير مفيد",
       thanks: "شكرًا على ملاحظتك",
       retry: "حاول مجددًا",
+      interrupted: "انقطعت الإجابة.",
       network: "تعذّر الوصول إلى المساعد. تحقّق من اتصالك وحاول مجددًا.",
       tooLong: "أبقِ سؤالك ضمن {max} حرف.",
     },
@@ -108,6 +113,7 @@
       notHelpful: "Pas utile",
       thanks: "Merci pour votre retour",
       retry: "Réessayer",
+      interrupted: "La réponse a été interrompue.",
       network: "Impossible de joindre l'assistant. Vérifiez votre connexion et réessayez.",
       tooLong: "Restez sous {max} caractères.",
     },
@@ -175,9 +181,11 @@
 
   function save() {
     try {
-      const messages = state.messages
-        .filter((m) => !m.pending)
-        .map(({ status, pending, ...kept }) => kept);
+      // An answer still streaming when the page goes away (the bubble closes,
+      // or the tab navigates) comes back as interrupted, with Try again.
+      const messages = state.messages.map(({ status, pending, ...kept }) =>
+        pending ? { ...kept, error: kept.error || t("interrupted") } : kept,
+      );
       sessionStorage.setItem(
         STORE_KEY,
         JSON.stringify({ lang: state.lang, sessionId: state.sessionId, messages }),
@@ -402,13 +410,18 @@
   // ------------------------------------------------------------ talking to the server
 
   function history() {
-    return state.messages
+    const turns = state.messages
       .filter((m) => !m.pending && !m.error && m.content)
       .slice(-MAX_HISTORY)
       .map((m) => ({
         role: m.role,
         content: m.role === "assistant" ? m.content.slice(0, MAX_ANSWER_CHARS) : m.content,
       }));
+    const encoder = new TextEncoder();
+    while (turns.length > 1 && encoder.encode(JSON.stringify(turns)).length > HISTORY_BYTES) {
+      turns.shift();
+    }
+    return turns;
   }
 
   async function send(question) {

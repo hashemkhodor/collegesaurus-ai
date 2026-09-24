@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import sys
 import time
 import uuid
@@ -28,14 +29,13 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from google import genai
 from pydantic import BaseModel, Field, ValidationError
+from starlette.background import BackgroundTask
 
 from chatbot import config
 from chatbot.agent import ChatTurn, system_prompt
 from chatbot.ingest import Embedder, GeminiEmbedder, Refresher
 from chatbot.logging_store import ChatLogger
-from chatbot.sources import CollegesaurusCorpus
 from chatbot.store import Page, SqliteNumpyStore
 from chatbot.tools import ToolRunner, question_locale
 
@@ -95,7 +95,7 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[Message] = Field(min_length=1)
     lang: str = "en"  # UI language: en | ar | fr
-    page: str | None = Field(default=None, max_length=300)  # site path the chat was opened on
+    page: str | None = None  # site path the chat was opened on; ignored if implausibly long
     session_id: str = Field(default="", max_length=64)
 
 
@@ -269,33 +269,45 @@ def create_app(
         if exceeded:
             return _error(429, exceeded, lang)
 
+        page = body.page if body.page and len(body.page) <= 300 else None
         runner = ToolRunner(
             store, s.embedder.embed_query, s.page_types, locale=question_locale(question)
         )
         turn = ChatTurn(
             s.genai_client,
             runner,
-            system_instruction=system_prompt(s.page_types, _page_for(store, body.page)),
+            system_instruction=system_prompt(s.page_types, _page_for(store, page)),
             model=s.model,
         )
         context = _Turn(
             turn_id=str(uuid.uuid4()),
             session_id=body.session_id,
             lang=lang,
-            page=body.page,
+            page=page,
             question=question,
             ip_hmac=s.logger.ip_hmac(ip),
             index_version=store.meta.get("content_sha"),
         )
+        log = _TurnLog(s.logger, turn, context, model=s.model)
         return StreamingResponse(
-            _stream(s, turn, _history(body.messages), context),
+            _stream(turn, _history(body.messages), context, log),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            # Runs after the last byte is sent, so a slow Supabase never holds
+            # the answer open.
+            background=BackgroundTask(log.write),
         )
 
     @app.post("/api/feedback")
-    async def feedback(body: Feedback, request: Request):
+    async def feedback(request: Request):
         s: Services = app.state.services
+        raw = await _read_limited(request, 1024)
+        if raw is None:
+            return _error(413, "too_large", "en")
+        try:
+            body = Feedback.model_validate_json(raw)
+        except ValidationError:
+            return _error(400, "invalid_request", "en")
         if s.limiter.check([("rate_limited", f"feedback:{_client_ip(request)}", 30, 60.0)]):
             return _error(429, "rate_limited", "en")
         await s.logger.log_feedback(str(body.turn_id), body.value)
@@ -304,7 +316,24 @@ def create_app(
     return app
 
 
-async def _stream(s: Services, turn: ChatTurn, history, ctx: _Turn) -> AsyncIterator[str]:
+class _TurnLog:
+    """Writes one turn's log row exactly once, whichever path gets there first."""
+
+    def __init__(self, logger: ChatLogger, turn: ChatTurn, ctx: _Turn, *, model: str):
+        self._logger = logger
+        self._turn = turn
+        self._ctx = ctx
+        self._model = model
+        self._written = False
+
+    async def write(self) -> None:
+        if self._written:
+            return
+        self._written = True
+        await self._logger.log_turn(_log_row(self._turn, self._ctx, self._model))
+
+
+async def _stream(turn: ChatTurn, history, ctx: _Turn, log: _TurnLog) -> AsyncIterator[str]:
     finished = False
     try:
         yield _sse("meta", {"turn_id": ctx.turn_id})
@@ -317,13 +346,14 @@ async def _stream(s: Services, turn: ChatTurn, history, ctx: _Turn) -> AsyncIter
             yield _sse("error", {"code": outcome, "message": _message(ctx.lang, outcome)})
         yield _sse("done", {"turn_id": ctx.turn_id, "outcome": outcome})
         finished = True
-        await s.logger.log_turn(_log_row(s, turn, ctx))
     finally:
-        if not finished:  # the client left mid-answer; log it without blocking
-            _in_background(s.logger.log_turn(_log_row(s, turn, ctx)))
+        if not finished:
+            # The client left mid-answer. The response's background task won't
+            # run after a disconnect, so log from here without blocking.
+            _in_background(log.write())
 
 
-def _log_row(s: Services, turn: ChatTurn, ctx: _Turn) -> dict:
+def _log_row(turn: ChatTurn, ctx: _Turn, model: str) -> dict:
     r = turn.result
     shown = _message(ctx.lang, r.outcome) if r.outcome in ("out_of_scope", "busy", "error") else ""
     return {
@@ -339,7 +369,7 @@ def _log_row(s: Services, turn: ChatTurn, ctx: _Turn) -> dict:
         "top_score": r.top_score,
         "error": r.error,
         "latency_ms": r.latency_ms,
-        "model": s.model,
+        "model": model,
         "index_version": ctx.index_version,
         "ip_hmac": ctx.ip_hmac,
     }
@@ -360,14 +390,22 @@ def _history(messages: list[Message]) -> list[tuple[str, str]]:
     return turns
 
 
+_LOCALE_PREFIX = re.compile(r"^/[a-z]{2}(?=/)")
+
+
 def _page_for(store: SqliteNumpyStore, path: str | None) -> Page | None:
-    """The indexed page at site path `path` (e.g. "/ar/universities/aub"), if any."""
+    """The indexed page at site path `path` (e.g. "/ar/universities/aub"), if any.
+
+    A page with no translation of its own (/ar/... or /fr/... showing English)
+    is indexed under its English URL, so the locale prefix is tried without too.
+    """
     if not path:
         return None
     wanted = path.split("?")[0].split("#")[0].rstrip("/")
-    for chunk in store.chunks:
-        if urlparse(chunk.url).path.rstrip("/") == wanted:
-            return Page(chunk.doc_id, chunk.type, chunk.title, chunk.url)
+    for candidate in dict.fromkeys([wanted, _LOCALE_PREFIX.sub("", wanted)]):
+        for chunk in store.chunks:
+            if urlparse(chunk.url).path.rstrip("/") == candidate:
+                return Page(chunk.doc_id, chunk.type, chunk.title, chunk.url)
     return None
 
 
@@ -433,10 +471,10 @@ async def _keepalive(logger: ChatLogger) -> None:
 
 
 def _production_services() -> Services:
-    client = genai.Client(api_key=config.gemini_api_key())
+    client = config.gemini_client()
     embedder = GeminiEmbedder(client)
     store = SqliteNumpyStore.load(config.INDEX_PATH) if config.INDEX_PATH.exists() else None
-    sources = [CollegesaurusCorpus(config.CORPUS_URLS, version=config.VERSION_URL)]
+    sources = config.sources()
     return Services(
         refresher=Refresher(sources, embedder, store),
         embedder=embedder,

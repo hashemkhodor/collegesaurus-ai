@@ -31,7 +31,9 @@ from chatbot.sources import CollegesaurusCorpus, Source
 from chatbot.store import Chunk, SqliteNumpyStore
 
 MIN_KEPT_FRACTION = 0.5  # refuse a rebuild that loses more than half a source's chunks
-_LEFTOVER_COMPONENT = re.compile(r"<([A-Z][A-Za-z0-9]*)[\s/>]")
+# An unconverted MDX component: <Name then an attribute or the end of the tag,
+# so prose such as "<TOEFL 80" is not mistaken for one.
+_LEFTOVER_COMPONENT = re.compile(r"<([A-Z][A-Za-z0-9]*)(?:\s+[A-Za-z][\w-]*\s*=|\s*/?>)")
 
 
 class GuardError(Exception):
@@ -98,7 +100,9 @@ class Refresher:
     ):
         self.sources = list(sources)
         self.embedder = embedder
-        self.store = store
+        # Never serve vectors from another embedding model (e.g. a snapshot baked
+        # before GEMINI_EMBED_MODEL changed): wait for the first refresh instead.
+        self.store = store if store is None or self._compatible(store) else None
         self.last_error: str | None = None
         self._clock = clock
         self._stale_after = stale_after
@@ -211,12 +215,14 @@ def main(argv: list[str] | None = None, *, embedder: Embedder | None = None) -> 
     args = parser.parse_args(argv)
 
     if args.corpus:
-        source = CollegesaurusCorpus(dict(item.split("=", 1) for item in args.corpus))
+        sources: list[Source] = [
+            CollegesaurusCorpus(dict(item.split("=", 1) for item in args.corpus))
+        ]
     else:
-        source = CollegesaurusCorpus(config.CORPUS_URLS, version=config.VERSION_URL)
-    embedder = embedder or GeminiEmbedder(genai.Client(api_key=config.gemini_api_key()))
+        sources = config.sources()
+    embedder = embedder or GeminiEmbedder(config.gemini_client())
     previous = SqliteNumpyStore.load(args.out) if args.out.exists() else None
-    refresher = Refresher([source], embedder, previous)
+    refresher = Refresher(sources, embedder, previous)
 
     changed = refresher.refresh_once()
     if refresher.last_error:

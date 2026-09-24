@@ -100,6 +100,9 @@ Other rate limits are set in `config.py`: 10 turns per 30 s per browser session,
 
 ## Deploy (Fly.io, one-time setup)
 
+0. First the site has to publish the corpus: merge the collegesaurus branch that adds
+   `plugins/chatbot-corpus` (and the 10-minute Drive check) and let its deploy run.
+   Until `CHAT_URL` changes (Cutover below), the bubble still opens the Streamlit app.
 1. `fly apps create collegesaurus-ai`. The name and region are in `fly.toml`.
 2. Set the runtime secrets:
    `fly secrets set GEMINI_API_KEY=… SUPABASE_URL=… SUPABASE_SECRET_KEY=… IP_HASH_SECRET=$(openssl rand -hex 32)`
@@ -115,10 +118,11 @@ Other rate limits are set in `config.py`: 10 turns per 30 s per browser session,
 
 ## Cutover from Streamlit
 
-1. In the collegesaurus repo, merge the `chatbot-corpus` plugin and the ChatBubble
-   change.
-2. Set its Actions variable `CHAT_URL` to the Fly URL and re-run the site deploy.
+1. With the site plugin live (Deploy step 0) and the chat healthy on Fly, set the
+   collegesaurus Actions variable `CHAT_URL` to the Fly URL and re-run the site deploy.
    To roll back, set `CHAT_URL` back to the Streamlit URL.
+2. Also switch the Streamlit fallback URL in the site (`docusaurus.config.ts`,
+   `ChatBubble/index.tsx`) to the new URL, so an unset `CHAT_URL` can't bring it back.
 3. About two weeks later:
    - remove the Streamlit files at the repo root, `chroma_db/` and the old pins;
    - move `chatbot/requirements.txt` to the root and point `.devcontainer` at uvicorn;

@@ -146,3 +146,31 @@ def test_breadcrumb_has_no_year_tag_when_the_page_has_no_content_year():
     chunks = chunk_document(make_doc("## Contacts\n\nCall 01-350000.\n", year=None))
 
     assert chunks[0].text.splitlines()[0] == f"{AUB_TITLE} › Contacts"
+
+
+def test_a_heading_stays_with_the_table_it_introduces():
+    rows = "\n".join(
+        f"| Grant {i:02d} | Part of tuition for students in need | 25% |" for i in range(40)
+    )
+    intro = "Intro paragraph about aid. " * 44  # fills a chunk on its own
+    body = (
+        f"## Scholarships\n\n{intro}\n\n#### Need-based aid\n\n"
+        f"| Grant | Details | Share |\n|---|---|---|\n{rows}\n"
+    )
+
+    chunks = chunk_document(make_doc(body))
+
+    assert not any(body_of(c).strip() == "#### Need-based aid" for c in chunks)
+    first_table_chunk = next(c for c in chunks if "| Grant 00 |" in c.text)
+    assert body_of(first_table_chunk).startswith("#### Need-based aid\n\n| Grant | Details |")
+
+
+def test_a_lead_in_line_stays_with_the_list_after_it():
+    intro = "Background on the program. " * 40  # leaves room for the lead-in only
+    items = "\n".join(f"- Document {i}: a certified copy" for i in range(10))
+    body = f"## Application\n\n{intro}\n\nYou will need:\n\n{items}\n"
+
+    chunks = chunk_document(make_doc(body))
+
+    list_chunk = next(c for c in chunks if "- Document 0:" in c.text)
+    assert body_of(list_chunk).startswith("You will need:\n\n- Document 0:")

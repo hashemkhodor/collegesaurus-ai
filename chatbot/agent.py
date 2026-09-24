@@ -130,6 +130,7 @@ class ChatTurn:
         ]
         request_config = self._config()
         sent_text = False  # text on screen that a retry would duplicate
+        shown = ""  # answer text the client has, kept if the turn fails
         try:
             for _ in range(self.max_steps):
                 for attempt in (1, 2):
@@ -149,6 +150,7 @@ class ChatTurn:
                                     released = gate.feed(part.text)
                                     if released:
                                         sent_text = True
+                                        shown += released
                                         yield "delta", {"text": released}
                         break
                     except genai_errors.APIError as exc:
@@ -166,6 +168,7 @@ class ChatTurn:
                     if gate.released:
                         yield "discard", {}
                         sent_text = False
+                        shown = ""
                     responses = []
                     for call in calls:
                         args = dict(call.args or {})
@@ -186,6 +189,12 @@ class ChatTurn:
                 if gate.out_of_scope:
                     self.result.outcome = "out_of_scope"
                     return
+                if not gate.text.strip():
+                    # Blocked for safety, out of tokens, or the empty reply Gemini
+                    # sometimes sends after a tool result: an error, not an answer.
+                    self.result.outcome = "error"
+                    self.result.error = "empty_response"
+                    return
                 if rest:
                     yield "delta", {"text": rest}
                 self.result.answer = gate.text.strip()
@@ -201,6 +210,8 @@ class ChatTurn:
             self.result.outcome = "error"
             self.result.error = f"{type(exc).__name__}: {exc}"
         finally:
+            if not self.result.answer and shown.strip():
+                self.result.answer = shown.strip()  # aborted or failed part-way
             self.result.top_score = self._runner.top_score
             self.result.latency_ms = int((time.perf_counter() - started) * 1000)
 

@@ -3,12 +3,12 @@
 A Source yields Documents: clean markdown plus metadata. Everything after this
 module (chunking, embedding, the store, the tools) works on Documents and never
 needs to know which site or format they came from, so adding a data source
-later means one new Source class plus one entry in config.SOURCES.
+later means one new Source class plus one line in config.sources().
 
 The collegesaurus site publishes its pages for us at build time: the site's
 chatbot-corpus plugin writes one corpus.json per locale (already cleaned to
 markdown) and a small version.json that changes on every build. The contract
-is documented in chatbot/README.md.
+is documented in chatbot/README.md; the registry is config.sources().
 """
 
 from __future__ import annotations

@@ -285,3 +285,19 @@ def test_cli_exits_non_zero_when_the_index_cannot_be_built(corpus_dir, embedder,
 
     assert code == 1
     assert not (tmp_path / "index.db").exists()
+
+
+def test_a_snapshot_from_another_embedding_model_is_never_served(corpus_dir, embedder):
+    built = Refresher([local_source(corpus_dir)], embedder, store=None)
+    built.refresh_once()
+    old = built.store
+    other_model = SqliteNumpyStore(old.chunks, old.vectors, old.meta | {"model": "other-model"})
+
+    assert Refresher([local_source(corpus_dir)], embedder, other_model).store is None
+
+
+def test_angle_brackets_in_prose_do_not_trip_the_component_guard(corpus_dir, embedder):
+    edit_body(corpus_dir, "en", "aub", lambda b: b + "\nTransfer applicants need <TOEFL 80.\n")
+    refresher = Refresher([local_source(corpus_dir)], embedder, store=None)
+
+    assert refresher.refresh_once() is True

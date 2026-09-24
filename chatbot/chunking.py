@@ -85,23 +85,43 @@ def _pieces(markdown: str, max_chars: int) -> list[tuple[tuple[str, ...], str]]:
 
 
 def _pack(body: str, max_chars: int) -> list[str]:
-    """Group blocks (paragraphs, tables, lists) into bodies of at most max_chars."""
+    """Group blocks (paragraphs, tables, lists) into bodies of about max_chars.
+
+    A lead-in (a heading, or a line ending in ":") never ends a chunk: it moves
+    on with the block it introduces.
+    """
     out: list[str] = []
     current: list[str] = []
+
+    def flush() -> list[str]:
+        """Emit `current` minus trailing lead-ins, and return those lead-ins."""
+        lead: list[str] = []
+        while current and _is_lead_in(current[-1]):
+            lead.insert(0, current.pop())
+        if current:
+            out.append("\n\n".join(current))
+        return lead
+
     for block in (b.strip("\n") for b in _BLANK_LINES.split(body) if b.strip()):
         if len(block) > max_chars:
-            if current:
-                out.append("\n\n".join(current))
-                current = []
-            out.extend(_split_block(block, max_chars))
+            lead = "\n\n".join(flush())
+            parts = _split_block(block, max_chars - len(lead) - 2 if lead else max_chars)
+            if lead:
+                parts[0] = f"{lead}\n\n{parts[0]}"
+            out.extend(parts)
+            current = []
             continue
         if current and len("\n\n".join([*current, block])) > max_chars:
-            out.append("\n\n".join(current))
-            current = []
+            current = flush()
         current.append(block)
     if current:
         out.append("\n\n".join(current))
     return out
+
+
+def _is_lead_in(block: str) -> bool:
+    one_line = "\n" not in block and len(block) <= 200
+    return one_line and (block.startswith("#") or block.rstrip().endswith(":"))
 
 
 def _split_block(block: str, max_chars: int) -> list[str]:

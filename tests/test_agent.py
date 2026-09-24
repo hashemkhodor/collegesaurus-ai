@@ -226,3 +226,29 @@ def test_system_prompt_names_the_page_the_user_is_viewing():
     )
     assert "reading this page" not in without_page
     assert "__out_of_scope__" in without_page
+
+
+@pytest.mark.anyio
+async def test_an_empty_model_reply_is_an_error_not_an_answer(store, embedder):
+    client = scripted_client(
+        [call_chunk("search", {"query": "AUB tuition"})],
+        [],  # e.g. blocked for safety, or the known empty reply after a tool result
+    )
+    turn = make_turn(client, store, embedder)
+
+    events = await collect(turn)
+
+    assert deltas(events) == ""
+    assert (turn.result.outcome, turn.result.error) == ("error", "empty_response")
+
+
+@pytest.mark.anyio
+async def test_text_already_shown_is_kept_when_the_turn_fails(store, embedder):
+    long_text = "AUB charges $1,000 per credit for its engineering programs, and more. "
+    client = scripted_client([text_chunk(long_text), busy(503)])
+    turn = make_turn(client, store, embedder)
+
+    await collect(turn)
+
+    assert turn.result.outcome == "error"
+    assert turn.result.answer == long_text.strip()

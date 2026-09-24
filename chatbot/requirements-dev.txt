@@ -1,5 +1,5 @@
 -r requirements.txt
 pytest>=8
-ruff>=0.6
+ruff>=0.16,<0.17  # pinned minor: `ruff format --check` in CI changes with the style
 # Starlette's TestClient (used by tests/test_server.py) now runs on httpx2.
 httpx2>=2.13

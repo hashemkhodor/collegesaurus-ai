@@ -291,3 +291,64 @@ def test_page_and_assets_are_revalidated_so_a_deploy_is_never_served_stale(harne
 
     for path in ("/", "/static/chat.css"):
         assert h.client.get(path).headers["cache-control"] == "no-cache"
+
+
+@pytest.mark.anyio
+async def test_the_stream_ends_without_waiting_for_the_log_write(corpus_dir, embedder, tmp_path):
+    import anyio
+
+    from chatbot.agent import ChatTurn
+    from chatbot.server import _stream, _Turn, _TurnLog
+    from chatbot.tools import ToolRunner
+
+    class HangingLogger:
+        written = False
+
+        async def log_turn(self, row):
+            await anyio.sleep_forever()
+
+    h = Harness(corpus_dir, embedder, tmp_path, [[text_chunk("Sure.")]])
+    runner = ToolRunner(h.refresher.store, embedder.embed_query, {}, locale="en")
+    turn = ChatTurn(h.gemini, runner, system_instruction="", model="gemini-2.5-flash-lite")
+    ctx = _Turn("t1", "s1", "en", None, "Hi", None, None)
+    log = _TurnLog(HangingLogger(), turn, ctx, model="gemini-2.5-flash-lite")
+
+    with anyio.fail_after(2):
+        kinds = [
+            chunk.split("\n", 1)[0] async for chunk in _stream(turn, [("user", "Hi")], ctx, log)
+        ]
+
+    assert kinds[-1] == "event: done"
+
+
+def test_an_overlong_page_is_ignored_rather_than_breaking_the_chat(harness):
+    h = harness([text_chunk("Sure.")])
+
+    response = h.chat(page="/" + "x" * 400)
+
+    assert response.status_code == 200
+    prompt = h.gemini.aio.models.requests[0]["config"].system_instruction
+    assert "reading this page" not in prompt
+
+
+@pytest.mark.parametrize("page", ["/ar/universities/lau", "/fr/universities/lau"])
+def test_pages_without_their_own_translation_still_give_context(harness, page):
+    h = harness([text_chunk("Apply before March 1.")])
+
+    h.chat("When is the deadline?", page=page)
+
+    prompt = h.gemini.aio.models.requests[0]["config"].system_instruction
+    lau = "LAU — Lebanese American University (https://collegesaurus.org/universities/lau)"
+    assert f"reading this page right now: {lau}" in prompt
+
+
+def test_an_oversized_feedback_body_is_rejected(harness):
+    h = harness()
+    body = b'{"turn_id": "' + b"x" * 5000 + b'", "value": 1}'
+
+    response = h.client.post(
+        "/api/feedback", content=body, headers={"Content-Type": "application/json"}
+    )
+
+    assert (response.status_code, response.json()["error"]) == (413, "too_large")
+    assert h.rows("chat_feedback") == []
