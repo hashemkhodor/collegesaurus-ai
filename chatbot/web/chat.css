@@ -120,6 +120,12 @@ button {
   cursor: pointer;
 }
 
+/* Taps show the :active styles below instead of the grey rectangle. */
+a,
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
@@ -139,8 +145,8 @@ button {
 /* Named areas keep every part in its row when the masthead is hidden (embed). */
 .app {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  grid-template-areas: "masthead" "toolbar" "conversation" "composer";
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "masthead" "conversation" "composer";
   height: 100vh;
   height: 100dvh;
   max-width: 46rem;
@@ -148,13 +154,27 @@ button {
   background: var(--soft);
 }
 
-/* Standalone page only: the site's bubble panel already has a title bar. */
+/* Standalone page only: the site's bubble panel already has a title bar, and
+   the site tells the chat its language. One bar, so phones keep their height
+   for the conversation. */
 .masthead {
   grid-area: masthead;
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 1rem 1rem 0.75rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--divider);
+  background: var(--paper);
+}
+
+.masthead-home {
+  display: flex;
+  flex: none;
+}
+
+.masthead-logo {
+  width: 2.5rem;
+  height: 2.5rem;
 }
 
 .masthead-text {
@@ -189,17 +209,6 @@ button {
   max-width: none;
 }
 
-.toolbar {
-  grid-area: toolbar;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  border-bottom: 1px solid var(--divider);
-  background: var(--paper);
-}
-
 .langs {
   display: inline-flex;
   padding: 2px;
@@ -224,42 +233,21 @@ button {
   box-shadow: 0 1px 2px rgb(16 24 40 / 0.12);
 }
 
-.new-chat {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.3rem 0.7rem;
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--brand-strong);
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.new-chat:hover {
-  background: var(--green-soft);
-}
-
-.new-chat svg {
-  width: 0.95rem;
-  height: 0.95rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-}
-
 /* ---------------------------------------------------------------- conversation */
 
+/* A flex column so the welcome can sit at the bottom, next to the composer
+   and within reach of a thumb. */
 .conversation {
   grid-area: conversation;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 1.25rem 0.875rem 1rem;
 }
 
 .welcome {
+  margin-top: auto;
   padding: 0.5rem 0.25rem 0;
 }
 
@@ -308,7 +296,7 @@ button {
   transition: border-color 120ms var(--ease), background 120ms var(--ease);
 }
 
-.suggestions button:hover {
+.suggestions button:active {
   border-color: var(--brand);
   background: var(--green-soft);
 }
@@ -362,6 +350,20 @@ button {
 .answer ul,
 .answer ol {
   padding-inline-start: 1.25em;
+}
+
+/* Every answer sits inside the messages <ol>, so browsers would start its
+   lists at the nested-list bullets. */
+.answer ul {
+  list-style-type: disc;
+}
+
+.answer ul ul {
+  list-style-type: circle;
+}
+
+.answer ul ul ul {
+  list-style-type: square;
 }
 
 .answer li + li {
@@ -510,10 +512,6 @@ button {
   text-decoration: none;
 }
 
-.source:hover {
-  text-decoration: underline;
-}
-
 .source svg {
   flex: none;
   width: 0.8rem;
@@ -549,7 +547,7 @@ button {
   color: var(--ink-subtle);
 }
 
-.feedback button:hover:not(:disabled) {
+.feedback button:active:not(:disabled) {
   background: var(--muted);
   color: var(--ink);
 }
@@ -602,6 +600,41 @@ button {
   font-weight: 600;
 }
 
+/* Below the last answer: starting over is rare, and this is where the eye is
+   when an answer ends. */
+.new-chat {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  align-self: center;
+  gap: 0.35rem;
+  margin-top: 1.25rem;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-pill);
+  background: var(--paper);
+  color: var(--brand-strong);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.new-chat[hidden] {
+  display: none;
+}
+
+.new-chat:active {
+  background: var(--green-soft);
+}
+
+.new-chat svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
 /* ---------------------------------------------------------------- composer */
 
 .composer {
@@ -619,8 +652,9 @@ button {
 
 .composer textarea {
   flex: 1;
-  min-height: 2.6rem;
+  min-height: 2.75rem; /* one 16px line plus padding, with room to spare */
   max-height: 9rem;
+  overflow-y: hidden; /* chat.js turns scrolling on only once the box is full */
   padding: 0.55rem 0.8rem;
   border: 1px solid var(--field-border);
   border-radius: 12px;
@@ -643,17 +677,18 @@ button {
   display: grid;
   flex: none;
   place-items: center;
-  width: 2.6rem;
-  height: 2.6rem;
+  width: 2.75rem;
+  height: 2.75rem;
   border: 0;
   border-radius: 50%;
   background: var(--brand-fill);
   color: #fff;
-  transition: background 120ms var(--ease);
+  transition: background 120ms var(--ease), transform 120ms var(--ease);
 }
 
-.send:hover:not(:disabled) {
+.send:active:not(:disabled) {
   background: var(--brand-fill-hover);
+  transform: scale(0.94);
 }
 
 .send:disabled {
@@ -679,6 +714,7 @@ button {
   color: var(--ink-subtle);
   font-size: var(--text-xs);
   line-height: 1.4;
+  text-wrap: balance;
 }
 
 .counter {
@@ -689,6 +725,97 @@ button {
 .counter.over {
   color: var(--danger);
   font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- small screens and touch */
+
+@media (hover: hover) {
+  .suggestions button:hover,
+  .new-chat:hover {
+    border-color: var(--brand);
+    background: var(--green-soft);
+  }
+
+  .source:hover {
+    text-decoration: underline;
+  }
+
+  .feedback button:hover:not(:disabled) {
+    background: var(--muted);
+    color: var(--ink);
+  }
+
+  .send:hover:not(:disabled) {
+    background: var(--brand-fill-hover);
+  }
+}
+
+/* Phones, and the site's 400px bubble panel: body text at 16px, and less
+   padding around the answer so more of each line fits. */
+@media (max-width: 640px) {
+  :root {
+    --text: 1rem;
+  }
+
+  .masthead {
+    gap: 0.6rem;
+    padding: 0.4rem 0.75rem;
+  }
+
+  .masthead-logo {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .masthead-title {
+    font-size: 1rem;
+  }
+
+  /* The logo already links to the site. */
+  .masthead-sub,
+  .masthead-link {
+    display: none;
+  }
+
+  .conversation {
+    padding: 1rem 0.75rem 0.75rem;
+  }
+
+  .msg-bot {
+    padding: 0.8rem 0.9rem;
+  }
+}
+
+/* Fingers: every control at least 36px, and the ones used most at 44px. */
+@media (pointer: coarse) {
+  .langs button {
+    min-height: 2.25rem;
+    padding-inline: 0.8rem;
+  }
+
+  .suggestions button {
+    min-height: 2.75rem;
+  }
+
+  .sources {
+    gap: 0.5rem;
+  }
+
+  .source {
+    min-height: 2.25rem;
+    padding-inline: 0.75rem;
+  }
+
+  .feedback button {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .notice button,
+  .new-chat {
+    min-height: 2.75rem;
+    padding-inline: 1.1rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

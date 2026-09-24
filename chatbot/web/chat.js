@@ -2,7 +2,8 @@
  * Collegesaurus AI chat page. Plain JavaScript, no build step.
  *
  * URL parameters (the site's chat bubble passes them to the iframe):
- *   embed=true  hide the page header (the bubble panel has its own)
+ *   embed=true  hide the page's title bar: the bubble panel has its own, and
+ *               the site sets the language
  *   lang=en|ar|fr, page=/universities/aub, theme=light|dark
  *
  * The conversation lives in this tab's sessionStorage, so closing and
@@ -36,10 +37,9 @@
         "What engineering majors does LAU offer?",
         "Which universities do you cover?",
       ],
-      placeholder: "Ask about a university, major or scholarship",
+      placeholder: "Ask your question…",
       send: "Send",
-      privacy:
-        "Questions are saved anonymously to improve Collegesaurus. Please don't include personal details.",
+      privacy: "Chats are saved anonymously. Avoid personal details.",
       searching: "Searching Collegesaurus",
       searchingUniversities: "Searching universities",
       searchingScholarships: "Searching scholarships",
@@ -68,9 +68,9 @@
         "ما تخصصات الهندسة في LAU؟",
         "ما الجامعات التي تغطيها؟",
       ],
-      placeholder: "اسأل عن جامعة أو تخصص أو منحة",
+      placeholder: "اكتب سؤالك…",
       send: "إرسال",
-      privacy: "تُحفظ الأسئلة من دون ما يعرّف بك لتحسين كوليجسورس. لا تكتب معلومات شخصية.",
+      privacy: "تُحفظ المحادثات من دون ما يعرّف بك. تجنّب المعلومات الشخصية.",
       searching: "أبحث في كوليجسورس",
       searchingUniversities: "أبحث في الجامعات",
       searchingScholarships: "أبحث في المنح",
@@ -99,10 +99,9 @@
         "Quelles spécialités d'ingénierie propose la LAU ?",
         "Quelles universités couvrez-vous ?",
       ],
-      placeholder: "Posez une question sur une université, une spécialité ou une bourse",
+      placeholder: "Posez votre question…",
       send: "Envoyer",
-      privacy:
-        "Les questions sont enregistrées anonymement pour améliorer Collegesaurus. N'indiquez pas d'informations personnelles.",
+      privacy: "Les échanges sont enregistrés anonymement. Évitez les données personnelles.",
       searching: "Recherche dans Collegesaurus",
       searchingUniversities: "Recherche dans les universités",
       searchingScholarships: "Recherche dans les bourses",
@@ -124,6 +123,10 @@
     up: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6.5 9 9.8 2.8c1 .2 1.7 1 1.6 2.1L11 8h4.4c1 0 1.7.9 1.5 1.9l-1.2 5.6c-.2.8-.9 1.5-1.8 1.5H6.5zM3 9h3.5v8H3z"/></svg>',
     down: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M13.5 11 10.2 17.2c-1-.2-1.7-1-1.6-2.1L9 12H4.6c-1 0-1.7-.9-1.5-1.9l1.2-5.6C4.5 3.7 5.2 3 6.1 3h7.4zM17 11h-3.5V3H17z"/></svg>',
   };
+
+  // Phones and tablets: the on-screen keyboard covers half the chat, so it
+  // only opens when the visitor taps the box.
+  const touch = window.matchMedia("(pointer: coarse)");
 
   const params = new URLSearchParams(location.search);
   const embedded = ["1", "true"].includes(params.get("embed"));
@@ -376,7 +379,8 @@
   function render() {
     els.welcome.hidden = state.messages.length > 0;
     els.messages.replaceChildren(...state.messages.map(renderMessage));
-    els.send.disabled = state.busy || els.input.value.trim().length > MAX_CHARS;
+    els.newChat.hidden = !state.messages.length || state.busy;
+    updateCounter();
   }
 
   // Re-render only the streaming message, at most once per frame.
@@ -436,7 +440,8 @@
     state.messages.push(bot);
     els.input.value = "";
     autosize();
-    updateCounter();
+    // Put the keyboard away so the answer gets the whole screen.
+    if (touch.matches) els.input.blur();
     state.busy = true;
     following = true;
     render();
@@ -558,14 +563,18 @@
     state.sessionId = newId();
     render();
     save();
-    els.input.focus();
+    if (!touch.matches) els.input.focus();
   }
 
   // ------------------------------------------------------------ composer
 
+  // Grow with the text up to the max height; only then let the box scroll.
   function autosize() {
-    els.input.style.height = "auto";
-    els.input.style.height = `${Math.min(els.input.scrollHeight + 2, 144)}px`;
+    const input = els.input;
+    input.style.height = "auto";
+    const full = input.scrollHeight + 2; // + borders
+    input.style.height = `${Math.min(full, 144)}px`;
+    input.style.overflowY = full > 144 ? "auto" : "hidden";
   }
 
   function updateCounter() {
@@ -574,7 +583,7 @@
     els.counter.textContent = `${length}/${MAX_CHARS}`;
     els.counter.classList.toggle("over", length > MAX_CHARS);
     els.counter.title = length > MAX_CHARS ? t("tooLong") : "";
-    els.send.disabled = state.busy || length > MAX_CHARS;
+    els.send.disabled = state.busy || !length || length > MAX_CHARS;
   }
 
   els.form.addEventListener("submit", (event) => {

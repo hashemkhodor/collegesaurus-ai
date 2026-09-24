@@ -17,29 +17,22 @@
   <body>
     <div class="app">
       <header class="masthead">
-        <img class="masthead-logo" src="/static/logo.svg" alt="" width="40" height="40" />
+        <a class="masthead-home" href="https://collegesaurus.org" data-i18n-label="site">
+          <img class="masthead-logo" src="/static/logo.svg" alt="" width="40" height="40" />
+        </a>
         <div class="masthead-text">
           <h1 class="masthead-title">Collegesaurus AI</h1>
           <p class="masthead-sub" data-i18n="tagline">
             Answers from the Collegesaurus guide to Lebanese universities and scholarships.
           </p>
         </div>
-        <a class="masthead-link" href="https://collegesaurus.org" data-i18n="site">Open the site</a>
-      </header>
-
-      <div class="toolbar">
         <div class="langs" role="group" aria-label="Language" data-i18n-label="language">
           <button type="button" data-lang="en" lang="en" aria-pressed="true">EN</button>
           <button type="button" data-lang="ar" lang="ar" aria-pressed="false">عربي</button>
           <button type="button" data-lang="fr" lang="fr" aria-pressed="false">FR</button>
         </div>
-        <button type="button" class="new-chat" id="new-chat">
-          <svg viewBox="0 0 20 20" aria-hidden="true">
-            <path d="M10 4v12M4 10h12" />
-          </svg>
-          <span data-i18n="newChat">New chat</span>
-        </button>
-      </div>
+        <a class="masthead-link" href="https://collegesaurus.org" data-i18n="site">Open the site</a>
+      </header>
 
       <main class="conversation" id="conversation">
         <section class="welcome" id="welcome">
@@ -52,6 +45,12 @@
           <ul class="suggestions" id="suggestions"></ul>
         </section>
         <ol class="messages" id="messages" role="log" aria-live="polite"></ol>
+        <button type="button" class="new-chat" id="new-chat" hidden>
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M10 4v12M4 10h12" />
+          </svg>
+          <span data-i18n="newChat">New chat</span>
+        </button>
         <noscript>
           <p class="welcome-body">
             This chat needs JavaScript. You can browse the same information on
@@ -63,14 +62,14 @@
       <form class="composer" id="composer">
         <div class="composer-row">
           <label class="visually-hidden" for="question" data-i18n="placeholder">
-            Ask about a university, major or scholarship
+            Ask your question…
           </label>
           <textarea
             id="question"
             rows="1"
             enterkeyhint="send"
             autocomplete="off"
-            placeholder="Ask about a university, major or scholarship"
+            placeholder="Ask your question…"
             data-i18n-placeholder="placeholder"
           ></textarea>
           <button type="submit" class="send" id="send" aria-label="Send" data-i18n-label="send">
@@ -80,10 +79,7 @@
           </button>
         </div>
         <p class="composer-meta">
-          <span data-i18n="privacy">
-            Questions are saved anonymously to improve Collegesaurus. Please don't include personal
-            details.
-          </span>
+          <span data-i18n="privacy">Chats are saved anonymously. Avoid personal details.</span>
           <span class="counter" id="counter" hidden></span>
         </p>
       </form>
