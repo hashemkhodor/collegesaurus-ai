@@ -1,0 +1,34 @@
+# Fly.io app for the chatbot service. One always-on machine: no sleeping.
+# Deployed by .github/workflows/deploy.yml (flyctl deploy --remote-only).
+app = "collegesaurus-ai"
+primary_region = "fra"  # Frankfurt, close to Lebanon
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  # Boot the new machine and wait for its health check before stopping the old one.
+  strategy = "bluegreen"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 50
+    hard_limit = 100
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/healthz"
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "60s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
