@@ -221,6 +221,14 @@
 
   // ------------------------------------------------------------ rendering
 
+  // Direction from the script that dominates the text, not its first letter:
+  // an Arabic answer often opens with a Latin acronym such as "AUB".
+  function direction(text) {
+    const arabic = (text.match(/[\u0600-\u06FF]/g) || []).length;
+    const latin = (text.match(/[A-Za-z]/g) || []).length;
+    return arabic > latin ? "rtl" : "ltr";
+  }
+
   function renderMarkdown(text) {
     const html = window.DOMPurify.sanitize(window.marked.parse(text, { gfm: true }), {
       FORBID_ATTR: ["style"],
@@ -233,6 +241,11 @@
       table.replaceWith(wrap);
       wrap.append(table);
     });
+    template.content
+      .querySelectorAll("p, li, h1, h2, h3, h4, blockquote, table")
+      .forEach((block) => {
+        block.dir = direction(block.textContent);
+      });
     template.content.querySelectorAll("a[href]").forEach((a) => {
       let url;
       try {
@@ -259,12 +272,12 @@
     const li = document.createElement("li");
     if (message.role === "user") {
       li.className = "msg-user";
-      li.dir = "auto";
+      li.dir = direction(message.content);
       li.textContent = message.content;
       return li;
     }
     li.className = "msg-bot";
-    li.dir = "auto";
+    li.dir = message.content ? direction(message.content) : document.documentElement.dir;
     li.setAttribute("aria-busy", String(Boolean(message.pending)));
 
     const answer = document.createElement("div");
@@ -364,22 +377,26 @@
     if (frame) return;
     frame = requestAnimationFrame(() => {
       frame = 0;
-      const stick = nearBottom();
       const index = state.messages.length - 1;
       const node = els.messages.lastElementChild;
       if (index < 0 || !node) return;
       node.replaceWith(renderMessage(state.messages[index], index));
-      if (stick) scrollToEnd();
+      if (following) showLatestQuestion();
     });
   }
 
-  function nearBottom() {
+  // While an answer streams, scroll down with it only until its question
+  // reaches the top, so a long answer reads from its first line. Scrolling
+  // by hand stops the following.
+  let following = false;
+  function showLatestQuestion() {
+    const questions = els.messages.querySelectorAll(".msg-user");
+    const question = questions[questions.length - 1];
+    if (!question) return;
     const c = els.conversation;
-    return c.scrollHeight - c.scrollTop - c.clientHeight < 80;
-  }
-
-  function scrollToEnd() {
-    els.conversation.scrollTop = els.conversation.scrollHeight;
+    const top = question.getBoundingClientRect().top - c.getBoundingClientRect().top + c.scrollTop;
+    const target = Math.min(top - 12, c.scrollHeight - c.clientHeight);
+    if (target > c.scrollTop) c.scrollTop = target;
   }
 
   // ------------------------------------------------------------ talking to the server
@@ -408,8 +425,9 @@
     autosize();
     updateCounter();
     state.busy = true;
+    following = true;
     render();
-    scrollToEnd();
+    showLatestQuestion();
     save();
 
     const controller = new AbortController();
@@ -442,7 +460,8 @@
         state.busy = false;
         bot.pending = false;
         render();
-        if (nearBottom()) scrollToEnd();
+        if (following) showLatestQuestion();
+        following = false;
         save();
       }
     }
@@ -570,6 +589,9 @@
 
   if (embedded) document.documentElement.classList.add("is-embed");
   if (theme === "dark" || theme === "light") document.documentElement.dataset.theme = theme;
+  ["wheel", "touchmove"].forEach((type) =>
+    els.conversation.addEventListener(type, () => (following = false), { passive: true }),
+  );
   applyLang();
-  scrollToEnd();
+  showLatestQuestion();
 })();
