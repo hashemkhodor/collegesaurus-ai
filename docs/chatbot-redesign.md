@@ -221,8 +221,9 @@ class Source(Protocol):
   - Logs record the source of every cited chunk.
 - **Adding a source is one class plus one registry line.** The server, UI, store schema and logging
   don't change.
-  - Candidates: `stories/`, `src/data/homepage/deadlines.ts`, the derived facts in `design/university-page`,
-    and the share-experience GitHub issues.
+  - Candidates: `src/data/homepage/deadlines.ts`, the derived facts in `design/university-page`,
+    and the share-experience GitHub issues. (`stories/` was added on 2026-09-24 at the owner's
+    request, as a `story` type in the site's corpus rather than a separate source.)
   - A much larger source, such as crawled university sites, would only swap the `VectorStore`.
 
 ## 4. How answers are produced (mostly reused)
@@ -448,7 +449,8 @@ The Streamlit app on `main` must keep working until cutover. So:
     - Normal commits only; no history rewrite.
 
 **Out of scope (step two and later):**
-- Any second data source: stories, deadlines, derived facts, experiences, external sites.
+- Any second data source: deadlines, derived facts, experiences, external sites. (Stories were
+  added on 2026-09-24, at the owner's request.)
 - A native React widget.
 - Accounts or an admin UI.
 - Hybrid keyword + vector search, unless the evaluation shows misses.

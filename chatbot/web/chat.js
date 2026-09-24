@@ -30,7 +30,7 @@
       newChat: "New chat",
       welcomeTitle: "What do you want to know?",
       welcomeBody:
-        "I answer from Collegesaurus pages on Lebanese universities, majors and scholarships, and link you to the source.",
+        "I answer from Collegesaurus pages on Lebanese universities, majors, scholarships and student stories, and link you to the source.",
       suggestions: [
         "What does AUB charge per credit?",
         "Which scholarships pay for study abroad?",
@@ -43,6 +43,7 @@
       searching: "Searching Collegesaurus",
       searchingUniversities: "Searching universities",
       searchingScholarships: "Searching scholarships",
+      searchingStories: "Searching stories",
       listing: "Listing pages",
       thinking: "Thinking",
       sources: "Sources",
@@ -61,7 +62,7 @@
       newChat: "محادثة جديدة",
       welcomeTitle: "ماذا تريد أن تعرف؟",
       welcomeBody:
-        "أجيب من صفحات كوليجسورس عن الجامعات اللبنانية والتخصصات والمنح، مع رابط إلى المصدر.",
+        "أجيب من صفحات كوليجسورس عن الجامعات اللبنانية والتخصصات والمنح وقصص الطلاب، مع رابط إلى المصدر.",
       suggestions: [
         "كم تبلغ كلفة الساعة المعتمدة في AUB؟",
         "ما المنح التي تموّل الدراسة في الخارج؟",
@@ -74,6 +75,7 @@
       searching: "أبحث في كوليجسورس",
       searchingUniversities: "أبحث في الجامعات",
       searchingScholarships: "أبحث في المنح",
+      searchingStories: "أبحث في القصص",
       listing: "أعدّ قائمة الصفحات",
       thinking: "أفكّر",
       sources: "المصادر",
@@ -92,7 +94,7 @@
       newChat: "Nouvelle discussion",
       welcomeTitle: "Que voulez-vous savoir ?",
       welcomeBody:
-        "Je réponds à partir des pages Collegesaurus sur les universités libanaises, les spécialités et les bourses, avec un lien vers la source.",
+        "Je réponds à partir des pages Collegesaurus sur les universités libanaises, les spécialités, les bourses et les témoignages d'étudiants, avec un lien vers la source.",
       suggestions: [
         "Combien coûte un crédit à l'AUB ?",
         "Quelles bourses financent des études à l'étranger ?",
@@ -105,6 +107,7 @@
       searching: "Recherche dans Collegesaurus",
       searchingUniversities: "Recherche dans les universités",
       searchingScholarships: "Recherche dans les bourses",
+      searchingStories: "Recherche dans les témoignages",
       listing: "Liste des pages",
       thinking: "Réflexion",
       sources: "Sources",
@@ -276,6 +279,7 @@
     if (data.tool === "list_pages") return t("listing");
     if (data.type === "university") return t("searchingUniversities");
     if (data.type === "scholarship") return t("searchingScholarships");
+    if (data.type === "story") return t("searchingStories");
     return t("searching");
   }
 

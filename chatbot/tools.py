@@ -58,7 +58,7 @@ def tool_declarations(page_types: dict[str, str]) -> list[types.FunctionDeclarat
             name="list_pages",
             description=(
                 "List every page we have, with its URL, optionally only one kind. Use "
-                "when the user asks which universities or scholarships we cover."
+                "when the user asks which universities, scholarships or stories we cover."
             ),
             parameters=types.Schema(type=types.Type.OBJECT, properties={"type": type_param}),
         ),

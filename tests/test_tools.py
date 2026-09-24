@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from conftest import local_source
 
@@ -7,6 +9,7 @@ from chatbot.tools import ToolRunner, question_locale, tool_declarations
 
 AUB_URL = "https://collegesaurus.org/universities/aub"
 LAU_URL = "https://collegesaurus.org/universities/lau"
+STORY_URL = "https://collegesaurus.org/stories/scholarship-awardees/abdelhamid-stipendium"
 
 
 @pytest.fixture
@@ -73,6 +76,45 @@ def test_search_can_be_limited_to_one_type(store, embedder):
     tools.run("search", {"query": "application deadline", "type": "scholarship"})
 
     assert {h.chunk.type for h in tools.hits} == {"scholarship"}
+
+
+def add_story(corpus_dir):
+    """A Stories post as the site publishes it: English only, so the Arabic
+    corpus carries a fallback copy of the English body."""
+    story = {
+        "type": "story",
+        "slug": "scholarship-awardees/abdelhamid-stipendium",
+        "title": "Stipendium Hungaricum, From Lebanon",
+        "url": STORY_URL,
+        "content_locale": "en",
+        "content_year": None,
+        "apply_url": None,
+        "body": (
+            "*By Abdelhamid Khaled, 17 May 2026.*\n\n"
+            "I first heard about Stipendium Hungaricum from a friend. In Lebanon the "
+            "application runs through the Ministry of Education."
+        ),
+    }
+    for name in ("corpus.en.json", "corpus.ar.json"):
+        path = corpus_dir / name
+        corpus = json.loads(path.read_text(encoding="utf-8"))
+        corpus["docs"].append(story)
+        path.write_text(json.dumps(corpus, ensure_ascii=False), encoding="utf-8")
+
+
+def test_stories_can_be_searched_and_listed_in_both_languages(corpus_dir, embedder):
+    add_story(corpus_dir)
+    refresher = Refresher([local_source(corpus_dir)], embedder, store=None)
+    refresher.refresh_once()
+
+    for locale in ("en", "ar"):
+        tools = runner(refresher.store, embedder, locale=locale)
+        found = tools.run("search", {"query": "Stipendium Hungaricum experience", "type": "story"})
+        listed = tools.run("list_pages", {"type": "story"})
+
+        assert found.startswith("[1] Stipendium Hungaricum, From Lebanon\n"), found
+        assert {h.chunk.type for h in tools.hits} == {"story"}
+        assert listed == f"- Stipendium Hungaricum, From Lebanon ({STORY_URL})"
 
 
 def test_bad_tool_calls_get_an_error_the_model_can_recover_from(store, embedder):

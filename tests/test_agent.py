@@ -228,6 +228,14 @@ def test_system_prompt_names_the_page_the_user_is_viewing():
     assert "__out_of_scope__" in without_page
 
 
+def test_prompt_puts_student_stories_in_scope():
+    prompt = system_prompt(CollegesaurusCorpus.types)
+    scope = next(line for line in prompt.splitlines() if "SCOPE" in line)
+
+    assert "- story: " in prompt
+    assert "stories" in scope
+
+
 @pytest.mark.anyio
 async def test_an_empty_model_reply_is_an_error_not_an_answer(store, embedder):
     client = scripted_client(

@@ -73,6 +73,12 @@ class CollegesaurusCorpus:
             "Scholarship pages: eligibility, benefits, application windows, "
             "supported universities and how to apply."
         ),
+        "story": (
+            "First-hand stories by students and Collegesaurus contributors: how they "
+            "applied, won scholarships and studied abroad, and their advice. One "
+            "person's experience: say whose it is, and take requirements, fees and "
+            "deadlines from the university and scholarship pages."
+        ),
     }
 
     def __init__(

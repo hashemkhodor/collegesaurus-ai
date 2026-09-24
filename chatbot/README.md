@@ -1,8 +1,8 @@
 # Collegesaurus AI — chatbot service
 
-A FastAPI app that answers questions about Lebanese universities, majors and
-scholarships from the pages on [collegesaurus.org](https://collegesaurus.org), with a
-link to each source. It replaces the Streamlit app at the repo root, which keeps
+A FastAPI app that answers questions about Lebanese universities, majors,
+scholarships and students' stories from the pages on
+[collegesaurus.org](https://collegesaurus.org), with a link to each source. It replaces the Streamlit app at the repo root, which keeps
 running until cutover. The design and the reasons behind it are in
 [`docs/chatbot-redesign.md`](../docs/chatbot-redesign.md).
 
@@ -70,7 +70,8 @@ The collegesaurus plugin `plugins/chatbot-corpus/` writes these files at build t
   when the Drive content or the site code changes; the chatbot polls it every minute.
 - **`/chatbot/corpus.json`** and **`/ar/chatbot/corpus.json`**:
   `{schema: 1, locale, content_sha, docs: [...]}`. Each doc has:
-  - `type`: `university` or `scholarship`
+  - `type`: `university`, `scholarship` or `story` (a post under Stories; its body
+    starts with a line naming the author and the date)
   - `slug`
   - `title`: e.g. `AUB — American University of Beirut`
   - `url`: absolute, the page not a section
