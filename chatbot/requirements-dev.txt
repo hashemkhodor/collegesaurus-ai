@@ -1,3 +1,5 @@
 -r requirements.txt
 pytest>=8
 ruff>=0.6
+# Starlette's TestClient (used by tests/test_server.py) now runs on httpx2.
+httpx2>=2.13

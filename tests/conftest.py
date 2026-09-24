@@ -6,9 +6,12 @@ import hashlib
 import re
 import shutil
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from google.genai import errors as genai_errors
+from google.genai import types
 
 from chatbot.sources import CollegesaurusCorpus
 
@@ -65,3 +68,58 @@ def local_source(directory: Path) -> CollegesaurusCorpus:
     return CollegesaurusCorpus(
         {"en": str(directory / "corpus.en.json"), "ar": str(directory / "corpus.ar.json")}
     )
+
+
+# --- Gemini streaming API stand-ins (external service) -----------------------
+
+
+def text_chunk(text: str) -> types.GenerateContentResponse:
+    return types.GenerateContentResponse(
+        candidates=[
+            types.Candidate(content=types.Content(role="model", parts=[types.Part(text=text)]))
+        ]
+    )
+
+
+def call_chunk(name: str, args: dict, call_id: str = "call-1") -> types.GenerateContentResponse:
+    part = types.Part(
+        function_call=types.FunctionCall(name=name, args=args, id=call_id),
+        thought_signature=b"signature-1",
+    )
+    return types.GenerateContentResponse(
+        candidates=[types.Candidate(content=types.Content(role="model", parts=[part]))]
+    )
+
+
+def busy(code: int = 503) -> genai_errors.APIError:
+    return genai_errors.APIError(code, {"error": {"code": code, "message": "overloaded"}})
+
+
+class ScriptedModels:
+    """Stands in for client.aio.models: each streaming call plays the next script.
+
+    A script is a list of response chunks (an exception in the list is raised
+    mid-stream), or an exception raised when the call is made.
+    """
+
+    def __init__(self, scripts):
+        self.scripts = list(scripts)
+        self.requests = []
+
+    async def generate_content_stream(self, *, model, contents, config):
+        self.requests.append({"model": model, "contents": list(contents), "config": config})
+        script = self.scripts.pop(0)
+        if isinstance(script, Exception):
+            raise script
+
+        async def chunks():
+            for item in script:
+                if isinstance(item, Exception):
+                    raise item
+                yield item
+
+        return chunks()
+
+
+def scripted_client(*scripts):
+    return SimpleNamespace(aio=SimpleNamespace(models=ScriptedModels(scripts)))
