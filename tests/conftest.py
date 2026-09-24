@@ -44,6 +44,11 @@ class FakeEmbedder:
 
 
 @pytest.fixture
+def anyio_backend() -> str:
+    return "asyncio"
+
+
+@pytest.fixture
 def embedder() -> FakeEmbedder:
     return FakeEmbedder()
 
