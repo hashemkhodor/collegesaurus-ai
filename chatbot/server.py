@@ -18,6 +18,7 @@ import time
 import uuid
 from collections import deque
 from collections.abc import AsyncIterator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -166,6 +167,10 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        # Query embedding and refreshes run in threads (the SDK calls are blocking).
+        # Python's default pool on a 1-CPU machine is 5 threads, which would queue a
+        # burst of chats behind each other.
+        asyncio.get_running_loop().set_default_executor(ThreadPoolExecutor(max_workers=32))
         if app.state.services is None:
             app.state.services = _production_services()
         loops = []

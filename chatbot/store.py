@@ -120,7 +120,9 @@ class SqliteNumpyStore:
         candidates = np.flatnonzero(mask)
         if candidates.size == 0:
             return []
-        scores = self.vectors[candidates] @ np.asarray(query, dtype=np.float32)
+        # Score every row, then pick: indexing the matrix first would copy it for
+        # every search, which adds up when many chats search at once.
+        scores = (self.vectors @ np.asarray(query, dtype=np.float32))[candidates]
         order = np.argsort(-scores, kind="stable")[:k]
         return [Hit(self.chunks[candidates[i]], float(scores[i])) for i in order]
 
