@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "locale": "ar",
+  "content_sha": "ar-sha-1",
+  "docs": [
+    {
+      "type": "university",
+      "slug": "aub",
+      "title": "AUB — الجامعة الأميركية في بيروت",
+      "url": "https://collegesaurus.org/ar/universities/aub",
+      "content_locale": "ar",
+      "content_year": "2026-2027",
+      "body": "# الجامعة الأميركية في بيروت (AUB)\n\n## الكليات\n\nتقدّم الجامعة نحو 46 برنامجًا جامعيًا في ست كليات.\n\n## الأقساط (العام الجامعي 2026-2027)\n\nيبلغ القسط **1,000 دولار لكل ساعة معتمدة** في برامج الهندسة.\n"
+    },
+    {
+      "type": "university",
+      "slug": "lau",
+      "title": "LAU — Lebanese American University",
+      "url": "https://collegesaurus.org/ar/universities/lau",
+      "content_locale": "en",
+      "content_year": "2025-2026",
+      "body": "# Lebanese American University (LAU)\n\n> Note: Not yet updated for 2026-2027. Figures below are from 2025-2026.\n\n## Application\n\nApply online before **March 1**. The SAT is optional.\n"
+    },
+    {
+      "type": "scholarship",
+      "slug": "fulbright",
+      "title": "برنامج فولبرايت للطلاب الأجانب",
+      "url": "https://collegesaurus.org/ar/scholarships/fulbright",
+      "content_locale": "ar",
+      "content_year": "2025-2026",
+      "body": "# برنامج فولبرايت للطلاب الأجانب\n\n## نظرة عامة\n\nيموّل برنامج فولبرايت دراسة الماجستير والدكتوراه في الولايات المتحدة للخريجين اللبنانيين.\n"
+    }
+  ]
+}

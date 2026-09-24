@@ -41,3 +41,8 @@ source_cache/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Search index for the FastAPI chatbot (chatbot/). Built by
+# `python -m chatbot.ingest` locally or in the deploy workflow; never committed.
+data/*.db
+data/*.db-journal
