@@ -233,6 +233,7 @@ async def test_an_empty_model_reply_is_an_error_not_an_answer(store, embedder):
     client = scripted_client(
         [call_chunk("search", {"query": "AUB tuition"})],
         [],  # e.g. blocked for safety, or the known empty reply after a tool result
+        [],  # still empty after the one re-prompt
     )
     turn = make_turn(client, store, embedder)
 
@@ -240,6 +241,28 @@ async def test_an_empty_model_reply_is_an_error_not_an_answer(store, embedder):
 
     assert deltas(events) == ""
     assert (turn.result.outcome, turn.result.error) == ("error", "empty_response")
+    assert len(client.aio.models.requests) == 3
+
+
+@pytest.mark.anyio
+async def test_an_empty_reply_after_tool_results_is_re_prompted_once(store, embedder):
+    # Gemini 2.5 Flash-Lite does this for some questions (seen with an Arabic
+    # question answered from list_pages); one re-prompt gets the answer.
+    client = scripted_client(
+        [call_chunk("list_pages", {"type": "scholarship"})],
+        [],
+        [text_chunk("These scholarships fund study abroad: Fulbright.")],
+    )
+    turn = make_turn(client, store, embedder)
+
+    events = await collect(turn)
+
+    assert deltas(events) == "These scholarships fund study abroad: Fulbright."
+    assert turn.result.outcome == "answered"
+    history = client.aio.models.requests[2]["contents"]
+    assert [c.role for c in history[-3:]] == ["model", "user", "user"]
+    assert history[-1].parts[0].text.startswith("Answer my question")
+    assert all(c.parts for c in history)  # no empty model turn sent back
 
 
 @pytest.mark.anyio

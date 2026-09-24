@@ -28,6 +28,8 @@ from chatbot.tools import ToolRunner, tool_declarations
 OUT_OF_SCOPE_SENTINEL = "__out_of_scope__"
 RETRYABLE_CODES = {429, 503}
 HOLD_CHARS = 60  # answer text held back until it clearly isn't the sentinel
+# Sent once when the model replies with nothing after a tool result.
+REPROMPT = "Answer my question now, using the tool results above."
 
 _PROMPT = """\
 You are Collegesaurus, an assistant that helps Lebanese high-school students \
@@ -131,6 +133,7 @@ class ChatTurn:
         request_config = self._config()
         sent_text = False  # text on screen that a retry would duplicate
         shown = ""  # answer text the client has, kept if the turn fails
+        reprompted = False
         try:
             for _ in range(self.max_steps):
                 for attempt in (1, 2):
@@ -190,8 +193,19 @@ class ChatTurn:
                     self.result.outcome = "out_of_scope"
                     return
                 if not gate.text.strip():
-                    # Blocked for safety, out of tokens, or the empty reply Gemini
-                    # sometimes sends after a tool result: an error, not an answer.
+                    if self.result.tool_calls and not reprompted:
+                        # Gemini 2.5 Flash-Lite sometimes replies with nothing after
+                        # a tool result (seen for an Arabic question answered from
+                        # list_pages); asking once gets the answer. The empty model
+                        # turn is dropped: Gemini rejects turns without parts.
+                        reprompted = True
+                        history.pop()
+                        history.append(
+                            types.Content(role="user", parts=[types.Part.from_text(text=REPROMPT)])
+                        )
+                        continue
+                    # Blocked for safety, out of tokens, or still empty after the
+                    # re-prompt: an error, not an answer.
                     self.result.outcome = "error"
                     self.result.error = "empty_response"
                     return
