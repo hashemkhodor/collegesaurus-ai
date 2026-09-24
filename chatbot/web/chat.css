@@ -94,9 +94,12 @@
   box-sizing: border-box;
 }
 
+/* The page itself never scrolls or bounces: only the conversation does. */
 html,
 body {
   height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
@@ -622,6 +625,7 @@ button {
   border: 1px solid var(--field-border);
   border-radius: 12px;
   background: var(--paper);
+  font-size: 1rem; /* under 16px, iPhones zoom the page when the field is tapped */
   line-height: 1.45;
   resize: none;
 }
