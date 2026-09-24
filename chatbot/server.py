@@ -208,13 +208,14 @@ def create_app(
     async def invalid_request(request: Request, exc: RequestValidationError):
         return _error(400, "invalid_request", "en")
 
-    @app.get("/", include_in_schema=False)
+    # HEAD too: uptime monitors often probe with it.
+    @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
     async def index():
         return FileResponse(web_dir / "index.html")
 
     app.mount("/static", StaticFiles(directory=web_dir, check_dir=False), name="static")
 
-    @app.get("/healthz")
+    @app.api_route("/healthz", methods=["GET", "HEAD"])
     async def healthz():
         refresher = app.state.services.refresher
         store = refresher.store

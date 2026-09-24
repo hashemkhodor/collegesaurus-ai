@@ -276,3 +276,10 @@ def test_arabic_questions_search_the_arabic_pages(harness):
     tool_result = h.gemini.aio.models.requests[1]["contents"][-1].parts[0].function_response
     assert "Source: https://collegesaurus.org/ar/universities/aub" in tool_result.response["result"]
     assert f"Source: {AUB_URL}\n" not in tool_result.response["result"]
+
+
+def test_page_and_health_answer_head_requests_from_uptime_monitors(harness):
+    h = harness()
+
+    assert h.client.head("/").status_code == 200
+    assert h.client.head("/healthz").status_code == 200

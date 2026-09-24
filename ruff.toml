@@ -2,7 +2,7 @@
 # modules at the repo root are left as they are until cutover.
 target-version = "py311"
 line-length = 100
-include = ["chatbot/**/*.py", "tests/**/*.py"]
+include = ["chatbot/**/*.py", "tests/**/*.py", "scripts/**/*.py"]
 
 [lint]
 select = ["E", "F", "W", "I", "B", "UP"]
