@@ -42,6 +42,7 @@ class Harness:
         web = tmp_path / "web"
         web.mkdir()
         (web / "index.html").write_text("<!doctype html><title>Collegesaurus AI</title>")
+        (web / "chat.css").write_text("body { margin: 0 }")
         services = Services(
             refresher=self.refresher,
             embedder=embedder,
@@ -283,3 +284,10 @@ def test_page_and_health_answer_head_requests_from_uptime_monitors(harness):
 
     assert h.client.head("/").status_code == 200
     assert h.client.head("/healthz").status_code == 200
+
+
+def test_page_and_assets_are_revalidated_so_a_deploy_is_never_served_stale(harness):
+    h = harness()
+
+    for path in ("/", "/static/chat.css"):
+        assert h.client.get(path).headers["cache-control"] == "no-cache"

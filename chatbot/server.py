@@ -202,6 +202,9 @@ def create_app(
         response.headers["Content-Security-Policy"] = csp
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            # Revalidate (cheap, ETags) so a deploy never leaves browsers on old JS/CSS.
+            response.headers.setdefault("Cache-Control", "no-cache")
         return response
 
     @app.exception_handler(RequestValidationError)

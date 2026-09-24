@@ -133,9 +133,11 @@ button {
 
 /* ---------------------------------------------------------------- frame */
 
+/* Named areas keep every part in its row when the masthead is hidden (embed). */
 .app {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-areas: "masthead" "toolbar" "conversation" "composer";
   height: 100vh;
   height: 100dvh;
   max-width: 46rem;
@@ -145,6 +147,7 @@ button {
 
 /* Standalone page only: the site's bubble panel already has a title bar. */
 .masthead {
+  grid-area: masthead;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -184,6 +187,7 @@ button {
 }
 
 .toolbar {
+  grid-area: toolbar;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -246,6 +250,7 @@ button {
 /* ---------------------------------------------------------------- conversation */
 
 .conversation {
+  grid-area: conversation;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 1.25rem 0.875rem 1rem;
@@ -597,6 +602,7 @@ button {
 /* ---------------------------------------------------------------- composer */
 
 .composer {
+  grid-area: composer;
   padding: 0.6rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom));
   border-top: 1px solid var(--divider);
   background: var(--paper);
