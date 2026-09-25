@@ -1,0 +1,623 @@
+/*
+ * Collegesaurus AI chat page. Plain JavaScript, no build step.
+ *
+ * URL parameters (the site's chat bubble passes them to the iframe):
+ *   embed=true  hide the page's title bar: the bubble panel has its own, and
+ *               the site sets the language
+ *   lang=en|ar|fr, page=/universities/aub, theme=light|dark
+ *
+ * The conversation lives in this tab's sessionStorage, so closing and
+ * reopening the bubble (which removes the iframe) keeps it. Answers stream
+ * from POST /api/chat as server-sent events: meta, status, delta, discard,
+ * sources, error, done.
+ */
+(() => {
+  "use strict";
+
+  const MAX_CHARS = 1000;
+  const MAX_HISTORY = 20;
+  const MAX_ANSWER_CHARS = 4000;
+  // The server accepts 32 KB; send the newest turns that fit in 24 KB
+  // (Arabic takes two bytes per character).
+  const HISTORY_BYTES = 24 * 1024;
+  const STORE_KEY = "collegesaurus-chat";
+
+  const STRINGS = {
+    en: {
+      tagline: "Answers from the Collegesaurus guide to Lebanese universities and scholarships.",
+      site: "Open the site",
+      language: "Language",
+      newChat: "New chat",
+      welcomeTitle: "What do you want to know?",
+      welcomeBody:
+        "I answer from Collegesaurus pages on Lebanese universities, majors, scholarships and student stories, and link you to the source.",
+      suggestions: [
+        "What does AUB charge per credit?",
+        "Which scholarships pay for study abroad?",
+        "What engineering majors does LAU offer?",
+        "Which universities do you cover?",
+      ],
+      placeholder: "Ask your question…",
+      send: "Send",
+      privacy: "Chats are saved anonymously. Avoid personal details.",
+      searching: "Searching Collegesaurus",
+      searchingUniversities: "Searching universities",
+      searchingScholarships: "Searching scholarships",
+      searchingStories: "Searching stories",
+      listing: "Listing pages",
+      thinking: "Thinking",
+      sources: "Sources",
+      helpful: "Helpful",
+      notHelpful: "Not helpful",
+      thanks: "Thanks for the feedback",
+      retry: "Try again",
+      interrupted: "The answer was interrupted.",
+      network: "Couldn't reach the assistant. Check your connection and try again.",
+      tooLong: "Keep your question under {max} characters.",
+    },
+    ar: {
+      tagline: "إجابات من دليل كوليجسورس للجامعات والمنح في لبنان.",
+      site: "افتح الموقع",
+      language: "اللغة",
+      newChat: "محادثة جديدة",
+      welcomeTitle: "ماذا تريد أن تعرف؟",
+      welcomeBody:
+        "أجيب من صفحات كوليجسورس عن الجامعات اللبنانية والتخصصات والمنح وقصص الطلاب، مع رابط إلى المصدر.",
+      suggestions: [
+        "كم تبلغ كلفة الساعة المعتمدة في AUB؟",
+        "ما المنح التي تموّل الدراسة في الخارج؟",
+        "ما تخصصات الهندسة في LAU؟",
+        "ما الجامعات التي تغطيها؟",
+      ],
+      placeholder: "اكتب سؤالك…",
+      send: "إرسال",
+      privacy: "تُحفظ المحادثات من دون ما يعرّف بك. تجنّب المعلومات الشخصية.",
+      searching: "أبحث في كوليجسورس",
+      searchingUniversities: "أبحث في الجامعات",
+      searchingScholarships: "أبحث في المنح",
+      searchingStories: "أبحث في القصص",
+      listing: "أعدّ قائمة الصفحات",
+      thinking: "أفكّر",
+      sources: "المصادر",
+      helpful: "مفيد",
+      notHelpful: "غير مفيد",
+      thanks: "شكرًا على ملاحظتك",
+      retry: "حاول مجددًا",
+      interrupted: "انقطعت الإجابة.",
+      network: "تعذّر الوصول إلى المساعد. تحقّق من اتصالك وحاول مجددًا.",
+      tooLong: "أبقِ سؤالك ضمن {max} حرف.",
+    },
+    fr: {
+      tagline: "Des réponses tirées du guide Collegesaurus des universités et bourses au Liban.",
+      site: "Ouvrir le site",
+      language: "Langue",
+      newChat: "Nouvelle discussion",
+      welcomeTitle: "Que voulez-vous savoir ?",
+      welcomeBody:
+        "Je réponds à partir des pages Collegesaurus sur les universités libanaises, les spécialités, les bourses et les témoignages d'étudiants, avec un lien vers la source.",
+      suggestions: [
+        "Combien coûte un crédit à l'AUB ?",
+        "Quelles bourses financent des études à l'étranger ?",
+        "Quelles spécialités d'ingénierie propose la LAU ?",
+        "Quelles universités couvrez-vous ?",
+      ],
+      placeholder: "Posez votre question…",
+      send: "Envoyer",
+      privacy: "Les échanges sont enregistrés anonymement. Évitez les données personnelles.",
+      searching: "Recherche dans Collegesaurus",
+      searchingUniversities: "Recherche dans les universités",
+      searchingScholarships: "Recherche dans les bourses",
+      searchingStories: "Recherche dans les témoignages",
+      listing: "Liste des pages",
+      thinking: "Réflexion",
+      sources: "Sources",
+      helpful: "Utile",
+      notHelpful: "Pas utile",
+      thanks: "Merci pour votre retour",
+      retry: "Réessayer",
+      interrupted: "La réponse a été interrompue.",
+      network: "Impossible de joindre l'assistant. Vérifiez votre connexion et réessayez.",
+      tooLong: "Restez sous {max} caractères.",
+    },
+  };
+
+  const ICONS = {
+    page: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 1.5h5.5L13 5v9.5H4zM9.5 1.5V5H13"/></svg>',
+    up: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6.5 9 9.8 2.8c1 .2 1.7 1 1.6 2.1L11 8h4.4c1 0 1.7.9 1.5 1.9l-1.2 5.6c-.2.8-.9 1.5-1.8 1.5H6.5zM3 9h3.5v8H3z"/></svg>',
+    down: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M13.5 11 10.2 17.2c-1-.2-1.7-1-1.6-2.1L9 12H4.6c-1 0-1.7-.9-1.5-1.9l1.2-5.6C4.5 3.7 5.2 3 6.1 3h7.4zM17 11h-3.5V3H17z"/></svg>',
+  };
+
+  // Phones and tablets: the on-screen keyboard covers half the chat, so it
+  // only opens when the visitor taps the box.
+  const touch = window.matchMedia("(pointer: coarse)");
+
+  const params = new URLSearchParams(location.search);
+  const embedded = ["1", "true"].includes(params.get("embed"));
+  const page = params.get("page") || "";
+  const theme = params.get("theme");
+
+  const $ = (selector) => document.querySelector(selector);
+  const els = {
+    welcome: $("#welcome"),
+    suggestions: $("#suggestions"),
+    messages: $("#messages"),
+    conversation: $("#conversation"),
+    form: $("#composer"),
+    input: $("#question"),
+    send: $("#send"),
+    counter: $("#counter"),
+    newChat: $("#new-chat"),
+  };
+
+  const saved = load();
+  const state = {
+    lang: pickLang(params.get("lang") || (saved && saved.lang) || navigator.language),
+    sessionId: (saved && saved.sessionId) || newId(),
+    messages: (saved && saved.messages) || [],
+    busy: false,
+    controller: null,
+  };
+
+  function pickLang(value) {
+    const code = String(value || "").toLowerCase();
+    if (code.startsWith("ar")) return "ar";
+    if (code.startsWith("fr")) return "fr";
+    return "en";
+  }
+
+  function t(key) {
+    return (STRINGS[state.lang][key] ?? STRINGS.en[key]).toString().replace("{max}", MAX_CHARS);
+  }
+
+  function newId() {
+    const bytes = new Uint8Array(8);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  // sessionStorage can be unavailable (blocked storage, private modes); the
+  // chat still works, it just won't survive the iframe being closed.
+  function load() {
+    try {
+      return JSON.parse(sessionStorage.getItem(STORE_KEY) || "null");
+    } catch {
+      return null;
+    }
+  }
+
+  function save() {
+    try {
+      // An answer still streaming when the page goes away (the bubble closes,
+      // or the tab navigates) comes back as interrupted, with Try again.
+      const messages = state.messages.map(({ status, pending, ...kept }) =>
+        pending ? { ...kept, error: kept.error || t("interrupted") } : kept,
+      );
+      sessionStorage.setItem(
+        STORE_KEY,
+        JSON.stringify({ lang: state.lang, sessionId: state.sessionId, messages }),
+      );
+    } catch {
+      /* keep going without persistence */
+    }
+  }
+
+  // ------------------------------------------------------------ language
+
+  function applyLang() {
+    const root = document.documentElement;
+    root.lang = state.lang;
+    root.dir = state.lang === "ar" ? "rtl" : "ltr";
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
+      el.textContent = t(el.dataset.i18n);
+    });
+    document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+      el.placeholder = t(el.dataset.i18nPlaceholder);
+    });
+    document.querySelectorAll("[data-i18n-label]").forEach((el) => {
+      el.setAttribute("aria-label", t(el.dataset.i18nLabel));
+    });
+    document.querySelectorAll(".langs button").forEach((button) => {
+      button.setAttribute("aria-pressed", String(button.dataset.lang === state.lang));
+    });
+    els.suggestions.replaceChildren(
+      ...STRINGS[state.lang].suggestions.map((text) => {
+        const li = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = text;
+        button.addEventListener("click", () => send(text));
+        li.append(button);
+        return li;
+      }),
+    );
+    render();
+  }
+
+  // ------------------------------------------------------------ rendering
+
+  // Direction from the script that dominates the text, not its first letter:
+  // an Arabic answer often opens with a Latin acronym such as "AUB".
+  function direction(text) {
+    const arabic = (text.match(/[\u0600-\u06FF]/g) || []).length;
+    const latin = (text.match(/[A-Za-z]/g) || []).length;
+    return arabic > latin ? "rtl" : "ltr";
+  }
+
+  function renderMarkdown(text) {
+    const html = window.DOMPurify.sanitize(window.marked.parse(text, { gfm: true }), {
+      FORBID_ATTR: ["style"],
+    });
+    const template = document.createElement("template");
+    template.innerHTML = html;
+    template.content.querySelectorAll("table").forEach((table) => {
+      const wrap = document.createElement("div");
+      wrap.className = "table-wrap";
+      table.replaceWith(wrap);
+      wrap.append(table);
+    });
+    template.content
+      .querySelectorAll("p, li, h1, h2, h3, h4, blockquote, table")
+      .forEach((block) => {
+        block.dir = direction(block.textContent);
+      });
+    template.content.querySelectorAll("a[href]").forEach((a) => {
+      let url;
+      try {
+        url = new URL(a.getAttribute("href"), location.href);
+      } catch {
+        return;
+      }
+      const onSite = url.hostname === "collegesaurus.org" || url.hostname.endsWith(".collegesaurus.org");
+      // Inside the site's bubble, site links open in the page itself.
+      a.target = onSite && embedded ? "_top" : "_blank";
+      a.rel = "noopener noreferrer";
+    });
+    return template.content;
+  }
+
+  function statusText(data) {
+    if (data.tool === "list_pages") return t("listing");
+    if (data.type === "university") return t("searchingUniversities");
+    if (data.type === "scholarship") return t("searchingScholarships");
+    if (data.type === "story") return t("searchingStories");
+    return t("searching");
+  }
+
+  function renderMessage(message, index) {
+    const li = document.createElement("li");
+    if (message.role === "user") {
+      li.className = "msg-user";
+      li.dir = direction(message.content);
+      li.textContent = message.content;
+      return li;
+    }
+    li.className = "msg-bot";
+    li.dir = message.content ? direction(message.content) : document.documentElement.dir;
+    li.setAttribute("aria-busy", String(Boolean(message.pending)));
+
+    const answer = document.createElement("div");
+    answer.className = "answer";
+    if (message.content) answer.append(renderMarkdown(message.content));
+    li.append(answer);
+
+    if (message.pending && !message.content) {
+      const status = document.createElement("div");
+      status.className = "status";
+      status.innerHTML = '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>';
+      status.append(document.createTextNode(message.status || t("thinking")));
+      li.append(status);
+    }
+
+    if (message.error) {
+      const notice = document.createElement("div");
+      notice.className = "notice";
+      notice.setAttribute("role", "alert");
+      notice.append(document.createTextNode(message.error));
+      if (index === state.messages.length - 1) {
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.textContent = t("retry");
+        retry.addEventListener("click", retryLast);
+        notice.append(retry);
+      }
+      li.append(notice);
+    }
+
+    const canRate = !message.pending && message.turnId && message.outcome === "answered";
+    if ((message.sources && message.sources.length) || canRate) {
+      const foot = document.createElement("div");
+      foot.className = "msg-foot";
+      if (message.sources && message.sources.length) {
+        const sources = document.createElement("div");
+        sources.className = "sources";
+        const label = document.createElement("span");
+        label.className = "sources-label";
+        label.textContent = t("sources");
+        sources.append(label);
+        for (const source of message.sources) {
+          const a = document.createElement("a");
+          a.className = "source";
+          a.href = source.url;
+          a.title = source.title;
+          a.target = embedded ? "_top" : "_blank";
+          a.rel = "noopener noreferrer";
+          a.innerHTML = ICONS.page;
+          const name = document.createElement("span");
+          name.textContent = source.title.split(" — ")[0];
+          a.append(name);
+          sources.append(a);
+        }
+        foot.append(sources);
+      }
+      if (canRate) foot.append(renderFeedback(message));
+      li.append(foot);
+    }
+    return li;
+  }
+
+  function renderFeedback(message) {
+    const box = document.createElement("div");
+    box.className = "feedback";
+    if (message.feedback) {
+      const thanks = document.createElement("span");
+      thanks.textContent = t("thanks");
+      box.append(thanks);
+    }
+    for (const [value, icon, label] of [
+      [1, ICONS.up, "helpful"],
+      [-1, ICONS.down, "notHelpful"],
+    ]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.innerHTML = icon;
+      button.setAttribute("aria-label", t(label));
+      button.title = t(label);
+      button.setAttribute("aria-pressed", String(message.feedback === value));
+      button.disabled = Boolean(message.feedback);
+      button.addEventListener("click", () => rate(message, value));
+      box.append(button);
+    }
+    return box;
+  }
+
+  function render() {
+    els.welcome.hidden = state.messages.length > 0;
+    els.messages.replaceChildren(...state.messages.map(renderMessage));
+    els.newChat.hidden = !state.messages.length || state.busy;
+    updateCounter();
+  }
+
+  // Re-render only the streaming message, at most once per frame.
+  let frame = 0;
+  function refreshLast() {
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      const index = state.messages.length - 1;
+      const node = els.messages.lastElementChild;
+      if (index < 0 || !node) return;
+      node.replaceWith(renderMessage(state.messages[index], index));
+      if (following) showLatestQuestion();
+    });
+  }
+
+  // While an answer streams, scroll down with it only until its question
+  // reaches the top, so a long answer reads from its first line. Scrolling
+  // by hand stops the following.
+  let following = false;
+  function showLatestQuestion() {
+    const questions = els.messages.querySelectorAll(".msg-user");
+    const question = questions[questions.length - 1];
+    if (!question) return;
+    const c = els.conversation;
+    const top = question.getBoundingClientRect().top - c.getBoundingClientRect().top + c.scrollTop;
+    const target = Math.min(top - 12, c.scrollHeight - c.clientHeight);
+    if (target > c.scrollTop) c.scrollTop = target;
+  }
+
+  // ------------------------------------------------------------ talking to the server
+
+  function history() {
+    const turns = state.messages
+      .filter((m) => !m.pending && !m.error && m.content)
+      .slice(-MAX_HISTORY)
+      .map((m) => ({
+        role: m.role,
+        content: m.role === "assistant" ? m.content.slice(0, MAX_ANSWER_CHARS) : m.content,
+      }));
+    const encoder = new TextEncoder();
+    while (turns.length > 1 && encoder.encode(JSON.stringify(turns)).length > HISTORY_BYTES) {
+      turns.shift();
+    }
+    return turns;
+  }
+
+  async function send(question) {
+    const text = question.trim();
+    if (!text || state.busy) return;
+    if (text.length > MAX_CHARS) {
+      updateCounter();
+      return;
+    }
+    state.messages.push({ role: "user", content: text });
+    const bot = { role: "assistant", content: "", pending: true, status: "", sources: [] };
+    state.messages.push(bot);
+    els.input.value = "";
+    autosize();
+    // Put the keyboard away so the answer gets the whole screen.
+    if (touch.matches) els.input.blur();
+    state.busy = true;
+    following = true;
+    render();
+    showLatestQuestion();
+    save();
+
+    const controller = new AbortController();
+    state.controller = controller;
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: history(),
+          lang: state.lang,
+          page,
+          session_id: state.sessionId,
+        }),
+        signal: controller.signal,
+      });
+      if (!response.ok || !response.body) {
+        const data = await response.json().catch(() => ({}));
+        bot.error = data.message || t("network");
+      } else {
+        await readEvents(response.body, (event, data) => handleEvent(bot, event, data));
+        if (!bot.outcome && !bot.error) bot.error = t("network");
+      }
+    } catch (error) {
+      if (error.name === "AbortError") return;
+      bot.error = t("network");
+    } finally {
+      if (state.controller === controller) {
+        state.controller = null;
+        state.busy = false;
+        bot.pending = false;
+        render();
+        if (following) showLatestQuestion();
+        following = false;
+        save();
+      }
+    }
+  }
+
+  function handleEvent(bot, event, data) {
+    switch (event) {
+      case "meta":
+        bot.turnId = data.turn_id;
+        break;
+      case "status":
+        bot.status = statusText(data);
+        break;
+      case "delta":
+        bot.content += data.text;
+        break;
+      case "discard":
+        bot.content = "";
+        break;
+      case "sources":
+        bot.sources = data.items;
+        break;
+      case "error":
+        bot.error = data.message;
+        break;
+      case "done":
+        bot.outcome = data.outcome;
+        break;
+    }
+    refreshLast();
+  }
+
+  async function readEvents(body, onEvent) {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let end;
+      while ((end = buffer.indexOf("\n\n")) >= 0) {
+        const block = buffer.slice(0, end);
+        buffer = buffer.slice(end + 2);
+        let event = "message";
+        const data = [];
+        for (const line of block.split("\n")) {
+          if (line.startsWith("event: ")) event = line.slice(7);
+          else if (line.startsWith("data: ")) data.push(line.slice(6));
+        }
+        if (data.length) onEvent(event, JSON.parse(data.join("\n")));
+      }
+    }
+  }
+
+  function retryLast() {
+    const last = state.messages[state.messages.length - 1];
+    const question = state.messages[state.messages.length - 2];
+    if (!last || last.role !== "assistant" || !question || question.role !== "user") return;
+    state.messages.splice(-2, 2);
+    send(question.content);
+  }
+
+  function rate(message, value) {
+    if (message.feedback || !message.turnId) return;
+    message.feedback = value;
+    render();
+    save();
+    fetch("/api/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ turn_id: message.turnId, value }),
+    }).catch(() => {});
+  }
+
+  function newChat() {
+    if (state.controller) state.controller.abort();
+    state.controller = null;
+    state.busy = false;
+    state.messages = [];
+    state.sessionId = newId();
+    render();
+    save();
+    if (!touch.matches) els.input.focus();
+  }
+
+  // ------------------------------------------------------------ composer
+
+  // Grow with the text up to the max height; only then let the box scroll.
+  function autosize() {
+    const input = els.input;
+    input.style.height = "auto";
+    const full = input.scrollHeight + 2; // + borders
+    input.style.height = `${Math.min(full, 144)}px`;
+    input.style.overflowY = full > 144 ? "auto" : "hidden";
+  }
+
+  function updateCounter() {
+    const length = els.input.value.trim().length;
+    els.counter.hidden = length < MAX_CHARS * 0.8;
+    els.counter.textContent = `${length}/${MAX_CHARS}`;
+    els.counter.classList.toggle("over", length > MAX_CHARS);
+    els.counter.title = length > MAX_CHARS ? t("tooLong") : "";
+    els.send.disabled = state.busy || !length || length > MAX_CHARS;
+  }
+
+  els.form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    send(els.input.value);
+  });
+  els.input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      send(els.input.value);
+    }
+  });
+  els.input.addEventListener("input", () => {
+    autosize();
+    updateCounter();
+  });
+  els.newChat.addEventListener("click", newChat);
+  document.querySelectorAll(".langs button").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.lang = button.dataset.lang;
+      applyLang();
+      save();
+    });
+  });
+
+  if (embedded) document.documentElement.classList.add("is-embed");
+  if (theme === "dark" || theme === "light") document.documentElement.dataset.theme = theme;
+  ["wheel", "touchmove"].forEach((type) =>
+    els.conversation.addEventListener(type, () => (following = false), { passive: true }),
+  );
+  applyLang();
+  showLatestQuestion();
+})();

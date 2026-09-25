@@ -1,0 +1,8 @@
+# Lint config for the chatbot/ service and its tests. The legacy Streamlit
+# modules at the repo root are left as they are until cutover.
+target-version = "py311"
+line-length = 100
+include = ["chatbot/**/*.py", "tests/**/*.py", "scripts/**/*.py"]
+
+[lint]
+select = ["E", "F", "W", "I", "B", "UP"]

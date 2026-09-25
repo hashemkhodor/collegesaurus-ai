@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "locale": "en",
+  "content_sha": "en-sha-1",
+  "docs": [
+    {
+      "type": "university",
+      "slug": "aub",
+      "title": "AUB — American University of Beirut",
+      "url": "https://collegesaurus.org/universities/aub",
+      "content_locale": "en",
+      "content_year": "2026-2027",
+      "body": "# American University of Beirut (AUB)\n\n## Faculty\n\nAUB offers ~46 undergraduate programs across six faculties.\n\n### Maroun Semaan Faculty of Engineering & Architecture ([MSFEA](https://www.aub.edu.lb/msfea))\n\n| Program | Degree | Department | Credits | Years |\n|---|---|---|---|---|\n| Architecture | BArch | School of Architecture and Design | 174 | 5 |\n| Civil Engineering | BE | Civil and Environmental Engineering | 150 | 4 |\n\n## Tuition (AY 2026-2027)\n\nTuition is **$1,000 per credit** for engineering programs.\n\n## Contacts\n\nAdmissions office: admissions@aub.edu.lb\n",
+      "apply_url": "https://join.aub.edu.lb/apply/"
+    },
+    {
+      "type": "university",
+      "slug": "lau",
+      "title": "LAU — Lebanese American University",
+      "url": "https://collegesaurus.org/universities/lau",
+      "content_locale": "en",
+      "content_year": "2025-2026",
+      "body": "# Lebanese American University (LAU)\n\n> Note: Not yet updated for 2026-2027. Figures below are from 2025-2026.\n\n## Application\n\nApply online before **March 1**. The SAT is optional.\n"
+    },
+    {
+      "type": "scholarship",
+      "slug": "fulbright",
+      "title": "Fulbright Foreign Student Program",
+      "url": "https://collegesaurus.org/scholarships/fulbright",
+      "content_locale": "en",
+      "content_year": "2025-2026",
+      "body": "# Fulbright Foreign Student Program\n\n## Overview\n\nFulbright funds master's and PhD study in the United States for Lebanese graduates.\n\n## Application window\n\nApplications open in **February** and close in **May**.\n"
+    }
+  ]
+}

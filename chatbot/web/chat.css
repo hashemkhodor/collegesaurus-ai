@@ -1,0 +1,829 @@
+/*
+ * Collegesaurus AI chat page.
+ *
+ * Built first for the site's 400×600 chat bubble panel (and full screen on
+ * phones), and also served as a standalone page. Colours, radii and shadows
+ * follow the site's own tokens (collegesaurus src/css/tokens.css) and it uses
+ * the same system font stack, so the embedded chat reads as part of the site.
+ * Logical properties throughout, so Arabic flips the whole layout.
+ */
+
+:root {
+  color-scheme: light;
+  --ink: #0f1b3d;
+  --ink-muted: #475467;
+  --ink-subtle: #667085;
+  --paper: #ffffff;
+  --soft: #f7f8fc;
+  --muted: #f2f4f7;
+  --divider: rgb(16 24 40 / 0.08);
+  --field-border: rgb(16 24 40 / 0.18);
+  --brand: #00a651; /* decoration only: 3.2 on white */
+  --brand-strong: #007439; /* text: 5.9 on white */
+  --brand-fill: #007a3d; /* behind white text: 5.45 */
+  --brand-fill-hover: #007439;
+  --green-soft: #e8f7ee;
+  --danger: #b42318;
+  --danger-soft: #fef3f2;
+  --focus: #007439;
+  --sheet-shadow: 0 1px 2px rgb(16 24 40 / 0.04), 0 8px 24px -12px rgb(16 24 40 / 0.14);
+
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell, "Noto Sans",
+    "Noto Sans Arabic", "Geeza Pro", sans-serif;
+  --text: 0.9375rem;
+  --text-sm: 0.8125rem;
+  --text-xs: 0.75rem;
+  --lh: 1.55;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-pill: 999px;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #e9ecf5;
+  --ink-muted: #b4bccb;
+  --ink-subtle: #9aa4b2;
+  --paper: #242526;
+  --soft: #1b1b1d;
+  --muted: rgb(255 255 255 / 0.06);
+  --divider: rgb(255 255 255 / 0.08);
+  --field-border: rgb(255 255 255 / 0.18);
+  --brand: #3cb371;
+  --brand-strong: #59c287;
+  --brand-fill: #277f4e;
+  --brand-fill-hover: #22704a;
+  --green-soft: rgb(60 179 113 / 0.16);
+  --danger: #fda29b;
+  --danger-soft: rgb(240 68 56 / 0.12);
+  --focus: #59c287;
+  --sheet-shadow: 0 0 0 1px var(--divider);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ink: #e9ecf5;
+    --ink-muted: #b4bccb;
+    --ink-subtle: #9aa4b2;
+    --paper: #242526;
+    --soft: #1b1b1d;
+    --muted: rgb(255 255 255 / 0.06);
+    --divider: rgb(255 255 255 / 0.08);
+    --field-border: rgb(255 255 255 / 0.18);
+    --brand: #3cb371;
+    --brand-strong: #59c287;
+    --brand-fill: #277f4e;
+    --brand-fill-hover: #22704a;
+    --green-soft: rgb(60 179 113 / 0.16);
+    --danger: #fda29b;
+    --danger-soft: rgb(240 68 56 / 0.12);
+    --focus: #59c287;
+    --sheet-shadow: 0 0 0 1px var(--divider);
+  }
+}
+
+/* Arabic joins its letters: no tracking, a touch larger and more open. */
+:root:lang(ar) {
+  --text: 1rem;
+  --lh: 1.7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* The page itself never scrolls or bounces: only the conversation does. */
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  margin: 0;
+  background: var(--soft);
+  color: var(--ink);
+  font: var(--text) / var(--lh) var(--font);
+  -webkit-text-size-adjust: 100%;
+}
+
+button,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* Taps show the :active styles below instead of the grey rectangle. */
+a,
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- frame */
+
+/* Named areas keep every part in its row when the masthead is hidden (embed). */
+.app {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: "masthead" "conversation" "composer";
+  height: 100vh;
+  height: 100dvh;
+  max-width: 46rem;
+  margin-inline: auto;
+  background: var(--soft);
+}
+
+/* Standalone page only: the site's bubble panel already has a title bar, and
+   the site tells the chat its language. One bar, so phones keep their height
+   for the conversation. */
+.masthead {
+  grid-area: masthead;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--divider);
+  background: var(--paper);
+}
+
+.masthead-home {
+  display: flex;
+  flex: none;
+}
+
+.masthead-logo {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.masthead-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.masthead-title {
+  margin: 0;
+  font-size: 1.125rem;
+  line-height: 1.3;
+}
+
+.masthead-sub {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.masthead-link {
+  color: var(--brand-strong);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.is-embed .masthead {
+  display: none;
+}
+
+.is-embed .app {
+  max-width: none;
+}
+
+.langs {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--muted);
+}
+
+.langs button {
+  min-width: 2.5rem;
+  padding: 0.2rem 0.65rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+}
+
+.langs button[aria-pressed="true"] {
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.12);
+}
+
+/* ---------------------------------------------------------------- conversation */
+
+/* A flex column so the welcome can sit at the bottom, next to the composer
+   and within reach of a thumb. */
+.conversation {
+  grid-area: conversation;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1.25rem 0.875rem 1rem;
+}
+
+.welcome {
+  margin-top: auto;
+  padding: 0.5rem 0.25rem 0;
+}
+
+.welcome[hidden] {
+  display: none;
+}
+
+.welcome-logo {
+  display: block;
+  width: 3.5rem;
+  height: 3.5rem;
+}
+
+.welcome-title {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 1.375rem;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+:lang(ar) .welcome-title {
+  letter-spacing: 0;
+}
+
+.welcome-body {
+  max-width: 34em;
+  margin: 0;
+  color: var(--ink-muted);
+}
+
+.suggestions {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.suggestions button {
+  width: 100%;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--divider);
+  border-radius: 12px;
+  background: var(--paper);
+  text-align: start;
+  transition: border-color 120ms var(--ease), background 120ms var(--ease);
+}
+
+.suggestions button:active {
+  border-color: var(--brand);
+  background: var(--green-soft);
+}
+
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.msg-user {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: 0.55rem 0.9rem;
+  border-radius: var(--radius-md);
+  border-end-end-radius: 4px;
+  background: var(--brand-fill);
+  color: #fff;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* An answer reads like a page of the guide: a sheet, not a bubble, so tables
+   and lists get the full width. */
+.msg-bot {
+  align-self: stretch;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  box-shadow: var(--sheet-shadow);
+  overflow-wrap: anywhere;
+}
+
+.answer > :first-child {
+  margin-top: 0;
+}
+
+.answer > :last-child {
+  margin-bottom: 0;
+}
+
+.answer p,
+.answer ul,
+.answer ol {
+  margin: 0 0 0.65em;
+}
+
+.answer ul,
+.answer ol {
+  padding-inline-start: 1.25em;
+}
+
+/* Every answer sits inside the messages <ol>, so browsers would start its
+   lists at the nested-list bullets. */
+.answer ul {
+  list-style-type: disc;
+}
+
+.answer ul ul {
+  list-style-type: circle;
+}
+
+.answer ul ul ul {
+  list-style-type: square;
+}
+
+.answer li + li {
+  margin-top: 0.2em;
+}
+
+.answer h1,
+.answer h2,
+.answer h3,
+.answer h4 {
+  margin: 0.9em 0 0.35em;
+  font-size: 1em;
+  line-height: 1.35;
+}
+
+.answer strong {
+  font-weight: 650;
+}
+
+.answer a {
+  color: var(--brand-strong);
+  text-underline-offset: 2px;
+}
+
+.answer code {
+  padding: 0.05em 0.3em;
+  border-radius: 4px;
+  background: var(--muted);
+  font-size: 0.9em;
+}
+
+.answer blockquote {
+  margin: 0 0 0.65em;
+  padding-inline-start: 0.75em;
+  border-inline-start: 3px solid var(--divider);
+  color: var(--ink-muted);
+}
+
+.table-wrap {
+  overflow-x: auto;
+  margin: 0 0 0.75em;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-sm);
+}
+
+.answer table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.answer th,
+.answer td {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--divider);
+  text-align: start;
+  vertical-align: top;
+}
+
+.answer th {
+  background: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.answer tr:last-child td {
+  border-bottom: 0;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--ink-subtle);
+  font-size: var(--text-sm);
+}
+
+.status .dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.status .dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--brand);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.status .dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.status .dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+.msg-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--divider);
+}
+
+.sources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.sources-label {
+  color: var(--ink-subtle);
+  font-size: var(--text-xs);
+}
+
+.source {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 14rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--radius-pill);
+  background: var(--green-soft);
+  color: var(--brand-strong);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.source svg {
+  flex: none;
+  width: 0.8rem;
+  height: 0.8rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+.source span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feedback {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin-inline-start: auto;
+  color: var(--ink-subtle);
+  font-size: var(--text-xs);
+}
+
+.feedback button {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-subtle);
+}
+
+.feedback button:active:not(:disabled) {
+  background: var(--muted);
+  color: var(--ink);
+}
+
+.feedback button:disabled {
+  cursor: default;
+}
+
+.feedback button[aria-pressed="true"] {
+  color: var(--brand-strong);
+}
+
+.feedback svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linejoin: round;
+}
+
+.feedback button[aria-pressed="true"] svg {
+  fill: currentColor;
+}
+
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.answer:empty + .notice {
+  margin-top: 0;
+}
+
+.notice button {
+  padding: 0.15rem 0.6rem;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+/* Below the last answer: starting over is rare, and this is where the eye is
+   when an answer ends. */
+.new-chat {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  align-self: center;
+  gap: 0.35rem;
+  margin-top: 1.25rem;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-pill);
+  background: var(--paper);
+  color: var(--brand-strong);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.new-chat[hidden] {
+  display: none;
+}
+
+.new-chat:active {
+  background: var(--green-soft);
+}
+
+.new-chat svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* ---------------------------------------------------------------- composer */
+
+.composer {
+  grid-area: composer;
+  padding: 0.6rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--divider);
+  background: var(--paper);
+}
+
+.composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.composer textarea {
+  flex: 1;
+  min-height: 2.75rem; /* one 16px line plus padding, with room to spare */
+  max-height: 9rem;
+  overflow-y: hidden; /* chat.js turns scrolling on only once the box is full */
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--field-border);
+  border-radius: 12px;
+  background: var(--paper);
+  font-size: 1rem; /* under 16px, iPhones zoom the page when the field is tapped */
+  line-height: 1.45;
+  resize: none;
+}
+
+.composer textarea::placeholder {
+  color: var(--ink-subtle);
+}
+
+.composer textarea:focus-visible {
+  border-color: var(--focus);
+  outline-offset: 0;
+}
+
+.send {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--brand-fill);
+  color: #fff;
+  transition: background 120ms var(--ease), transform 120ms var(--ease);
+}
+
+.send:active:not(:disabled) {
+  background: var(--brand-fill-hover);
+  transform: scale(0.94);
+}
+
+.send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.send svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  fill: currentColor;
+}
+
+[dir="rtl"] .send svg {
+  transform: scaleX(-1);
+}
+
+.composer-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0.4rem 0.15rem 0;
+  color: var(--ink-subtle);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  text-wrap: balance;
+}
+
+.counter {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.counter.over {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- small screens and touch */
+
+@media (hover: hover) {
+  .suggestions button:hover,
+  .new-chat:hover {
+    border-color: var(--brand);
+    background: var(--green-soft);
+  }
+
+  .source:hover {
+    text-decoration: underline;
+  }
+
+  .feedback button:hover:not(:disabled) {
+    background: var(--muted);
+    color: var(--ink);
+  }
+
+  .send:hover:not(:disabled) {
+    background: var(--brand-fill-hover);
+  }
+}
+
+/* Phones, and the site's 400px bubble panel: body text at 16px, and less
+   padding around the answer so more of each line fits. */
+@media (max-width: 640px) {
+  :root {
+    --text: 1rem;
+  }
+
+  .masthead {
+    gap: 0.6rem;
+    padding: 0.4rem 0.75rem;
+  }
+
+  .masthead-logo {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .masthead-title {
+    font-size: 1rem;
+  }
+
+  /* The logo already links to the site. */
+  .masthead-sub,
+  .masthead-link {
+    display: none;
+  }
+
+  .conversation {
+    padding: 1rem 0.75rem 0.75rem;
+  }
+
+  .msg-bot {
+    padding: 0.8rem 0.9rem;
+  }
+}
+
+/* Fingers: every control at least 36px, and the ones used most at 44px. */
+@media (pointer: coarse) {
+  .langs button {
+    min-height: 2.25rem;
+    padding-inline: 0.8rem;
+  }
+
+  .suggestions button {
+    min-height: 2.75rem;
+  }
+
+  .sources {
+    gap: 0.5rem;
+  }
+
+  .source {
+    min-height: 2.25rem;
+    padding-inline: 0.75rem;
+  }
+
+  .feedback button {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .notice button,
+  .new-chat {
+    min-height: 2.75rem;
+    padding-inline: 1.1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,44 @@
+name: Deploy chatbot to Fly.io
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "chatbot/**"
+      - "Dockerfile"
+      - ".dockerignore"
+      - "fly.toml"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build the index and deploy
+    # Off until the Fly app and secrets exist (chatbot/README.md, "Deploy"):
+    # set the repository variable FLY_DEPLOY_ENABLED to true.
+    if: vars.FLY_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: chatbot/requirements.txt
+      - run: pip install -r chatbot/requirements.txt
+      # Snapshot baked into the image so a boot is instant; the running app
+      # keeps it fresh by polling the site. A failed fetch or guard stops here.
+      - name: Build the index snapshot from the live site
+        run: python -m chatbot.ingest --out data/index.db
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      # One machine: without --ha=false, a deploy to an app that has no
+      # machines (a new app, or after they were removed) creates two.
+      - run: flyctl deploy --remote-only --ha=false
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

@@ -1,0 +1,6 @@
+# Only chatbot/ and data/ go into the image.
+*
+!chatbot/
+!data/
+chatbot/**/__pycache__
+data/*.tmp

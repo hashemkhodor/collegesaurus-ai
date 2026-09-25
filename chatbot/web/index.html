@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Collegesaurus AI</title>
+    <meta
+      name="description"
+      content="Ask about Lebanese universities, majors and scholarships. Answers come from Collegesaurus pages, with links to the source."
+    />
+    <link rel="icon" href="/static/logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/chat.css" />
+    <script src="/static/vendor/marked.umd.js" defer></script>
+    <script src="/static/vendor/purify.min.js" defer></script>
+    <script src="/static/chat.js" defer></script>
+  </head>
+  <body>
+    <div class="app">
+      <header class="masthead">
+        <a class="masthead-home" href="https://collegesaurus.org" data-i18n-label="site">
+          <img class="masthead-logo" src="/static/logo.svg" alt="" width="40" height="40" />
+        </a>
+        <div class="masthead-text">
+          <h1 class="masthead-title">Collegesaurus AI</h1>
+          <p class="masthead-sub" data-i18n="tagline">
+            Answers from the Collegesaurus guide to Lebanese universities and scholarships.
+          </p>
+        </div>
+        <div class="langs" role="group" aria-label="Language" data-i18n-label="language">
+          <button type="button" data-lang="en" lang="en" aria-pressed="true">EN</button>
+          <button type="button" data-lang="ar" lang="ar" aria-pressed="false">عربي</button>
+          <button type="button" data-lang="fr" lang="fr" aria-pressed="false">FR</button>
+        </div>
+        <a class="masthead-link" href="https://collegesaurus.org" data-i18n="site">Open the site</a>
+      </header>
+
+      <main class="conversation" id="conversation">
+        <section class="welcome" id="welcome">
+          <img class="welcome-logo" src="/static/logo.svg" alt="" width="56" height="56" />
+          <h2 class="welcome-title" data-i18n="welcomeTitle">What do you want to know?</h2>
+          <p class="welcome-body" data-i18n="welcomeBody">
+            I answer from Collegesaurus pages on Lebanese universities, majors, scholarships and
+            student stories, and link you to the source.
+          </p>
+          <ul class="suggestions" id="suggestions"></ul>
+        </section>
+        <ol class="messages" id="messages" role="log" aria-live="polite"></ol>
+        <button type="button" class="new-chat" id="new-chat" hidden>
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M10 4v12M4 10h12" />
+          </svg>
+          <span data-i18n="newChat">New chat</span>
+        </button>
+        <noscript>
+          <p class="welcome-body">
+            This chat needs JavaScript. You can browse the same information on
+            <a href="https://collegesaurus.org">collegesaurus.org</a>.
+          </p>
+        </noscript>
+      </main>
+
+      <form class="composer" id="composer">
+        <div class="composer-row">
+          <label class="visually-hidden" for="question" data-i18n="placeholder">
+            Ask your question…
+          </label>
+          <textarea
+            id="question"
+            rows="1"
+            enterkeyhint="send"
+            autocomplete="off"
+            placeholder="Ask your question…"
+            data-i18n-placeholder="placeholder"
+          ></textarea>
+          <button type="submit" class="send" id="send" aria-label="Send" data-i18n-label="send">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3.4 20.4 21 12 3.4 3.6 3.39 10.13 15 12 3.39 13.87z" />
+            </svg>
+          </button>
+        </div>
+        <p class="composer-meta">
+          <span data-i18n="privacy">Chats are saved anonymously. Avoid personal details.</span>
+          <span class="counter" id="counter" hidden></span>
+        </p>
+      </form>
+    </div>
+  </body>
+</html>
