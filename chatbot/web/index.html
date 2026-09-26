@@ -8,7 +8,9 @@
       name="description"
       content="Ask about Lebanese universities, majors and scholarships. Answers come from Collegesaurus pages, with links to the source."
     />
-    <link rel="icon" href="/static/logo.svg" type="image/svg+xml" />
+    <link rel="icon" href="/static/favicon.ico" sizes="48x48" />
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
     <link rel="stylesheet" href="/static/chat.css" />
     <script src="/static/vendor/marked.umd.js" defer></script>
     <script src="/static/vendor/purify.min.js" defer></script>
@@ -18,10 +20,11 @@
     <div class="app">
       <header class="masthead">
         <a class="masthead-home" href="https://collegesaurus.org" data-i18n-label="site">
-          <img class="masthead-logo" src="/static/logo.svg" alt="" width="40" height="40" />
+          <img class="masthead-logo logo-light" src="/static/logo-icon.svg" alt="" width="40" height="40" />
+          <img class="masthead-logo logo-dark" src="/static/logo-icon-dark.svg" alt="" width="40" height="40" />
         </a>
         <div class="masthead-text">
-          <h1 class="masthead-title">Collegesaurus AI</h1>
+          <h1 class="masthead-title">College<span class="masthead-saurus">saurus</span> AI</h1>
           <p class="masthead-sub" data-i18n="tagline">
             Answers from the Collegesaurus guide to Lebanese universities and scholarships.
           </p>
@@ -36,7 +39,8 @@
 
       <main class="conversation" id="conversation">
         <section class="welcome" id="welcome">
-          <img class="welcome-logo" src="/static/logo.svg" alt="" width="56" height="56" />
+          <img class="welcome-logo logo-light" src="/static/logo-icon.svg" alt="" width="56" height="56" />
+          <img class="welcome-logo logo-dark" src="/static/logo-icon-dark.svg" alt="" width="56" height="56" />
           <h2 class="welcome-title" data-i18n="welcomeTitle">What do you want to know?</h2>
           <p class="welcome-body" data-i18n="welcomeBody">
             I answer from Collegesaurus pages on Lebanese universities, majors, scholarships and
