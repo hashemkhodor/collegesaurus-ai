@@ -27,7 +27,7 @@ VERSION_URL = f"{SITE_URL}/chatbot/version.json"
 # Snapshot baked into the image by the deploy workflow; loaded at boot.
 INDEX_PATH = Path(os.environ.get("INDEX_PATH", PACKAGE_DIR.parent / "data" / "index.db"))
 
-GEMINI_CHAT_MODEL = os.environ.get("GEMINI_CHAT_MODEL", "gemini-2.5-flash-lite")
+GEMINI_CHAT_MODEL = os.environ.get("GEMINI_CHAT_MODEL", "gemini-3.5-flash-lite")
 GEMINI_EMBED_MODEL = os.environ.get("GEMINI_EMBED_MODEL", "gemini-embedding-001")
 GEMINI_TIMEOUT_MS = 30_000  # the SDK default is no timeout; a stalled call must end
 EMBED_DIM = 768

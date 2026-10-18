@@ -335,7 +335,14 @@ class _TurnLog:
         if self._written:
             return
         self._written = True
-        await self._logger.log_turn(_log_row(self._turn, self._ctx, self._model))
+        row = _log_row(self._turn, self._ctx, self._model)
+        # Always in the Fly logs, so token spend is visible without Supabase.
+        usage = " ".join(f"{k}={row[k]}" for k in _USAGE_FIELDS)
+        print(
+            f"[turn] {row['turn_id']} model={row['model']} outcome={row['outcome']} {usage}",
+            flush=True,
+        )
+        await self._logger.log_turn(row)
 
 
 async def _stream(turn: ChatTurn, history, ctx: _Turn, log: _TurnLog) -> AsyncIterator[str]:
@@ -358,6 +365,9 @@ async def _stream(turn: ChatTurn, history, ctx: _Turn, log: _TurnLog) -> AsyncIt
             _in_background(log.write())
 
 
+_USAGE_FIELDS = ("model_calls", "input_tokens", "cached_tokens", "output_tokens", "thinking_tokens")
+
+
 def _log_row(turn: ChatTurn, ctx: _Turn, model: str) -> dict:
     r = turn.result
     shown = _message(ctx.lang, r.outcome) if r.outcome in ("out_of_scope", "busy", "error") else ""
@@ -374,6 +384,7 @@ def _log_row(turn: ChatTurn, ctx: _Turn, model: str) -> dict:
         "top_score": r.top_score,
         "error": r.error,
         "latency_ms": r.latency_ms,
+        **{k: getattr(r, k) for k in _USAGE_FIELDS},
         "model": model,
         "index_version": ctx.index_version,
         "ip_hmac": ctx.ip_hmac,
