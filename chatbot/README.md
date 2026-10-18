@@ -87,7 +87,7 @@ The collegesaurus plugin `plugins/chatbot-corpus/` writes these files at build t
 | Variable | Default | What it's for |
 |---|---|---|
 | `GEMINI_API_KEY` | required | Chat and embeddings |
-| `GEMINI_CHAT_MODEL` | `gemini-2.5-flash-lite` | `gemini-3.5-flash-lite` also works |
+| `GEMINI_CHAT_MODEL` | `gemini-3.5-flash-lite` | `gemini-2.5-flash-lite` also works (cheaper) |
 | `GEMINI_EMBED_MODEL` | `gemini-embedding-001` | 768-dimension vectors |
 | `SITE_URL` | `https://collegesaurus.org` | Where the corpus comes from |
 | `INDEX_PATH` | `data/index.db` | Index snapshot loaded at startup |
@@ -135,6 +135,10 @@ Other rate limits are set in `config.py`: 10 turns per 30 s per browser session,
 - **Questions:** Supabase `chat_logs` has one row per turn, with outcome, cited sources
   and top retrieval score. `chat_feedback` holds the thumbs up/down. The `chat_gaps`
   view lists off-topic refusals, thumbs-down answers and weak matches.
+- **Token usage:** every turn prints a `[turn]` line to the Fly logs (`fly logs`) with
+  the model, outcome and token counts summed over its model calls: `input_tokens`,
+  `cached_tokens`, `output_tokens` and `thinking_tokens` (billed as output). The same
+  fields go into `chat_logs`; re-run the SQL file to add the columns.
 - **Freshness:** `/healthz` shows the build id and `content_sha` being served, the last
   good poll and the last refresh error. `stale` turns true after 10 minutes of failed polls.
 - **Refreshes:** the running app never swaps in an index that loses more than half its

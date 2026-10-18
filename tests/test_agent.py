@@ -1,5 +1,5 @@
 import pytest
-from conftest import busy, call_chunk, local_source, scripted_client, text_chunk
+from conftest import busy, call_chunk, local_source, scripted_client, text_chunk, usage_chunk
 
 from chatbot.agent import ChatTurn, system_prompt
 from chatbot.ingest import Refresher
@@ -283,3 +283,32 @@ async def test_text_already_shown_is_kept_when_the_turn_fails(store, embedder):
 
     assert turn.result.outcome == "error"
     assert turn.result.answer == long_text.strip()
+
+
+@pytest.mark.anyio
+async def test_token_usage_is_summed_over_the_turns_model_calls(store, embedder):
+    client = scripted_client(
+        [call_chunk("search", {"query": "AUB tuition"}), usage_chunk(900, 20, thoughts=50)],
+        [
+            text_chunk(f"AUB charges $1,000 per credit ([AUB]({AUB_URL}))."),
+            usage_chunk(1500, 60, cached=1000),
+        ],
+    )
+    turn = make_turn(client, store, embedder)
+
+    await collect(turn)
+
+    r = turn.result
+    assert r.outcome == "answered"
+    assert (r.model_calls, r.input_tokens, r.cached_tokens) == (2, 2400, 1000)
+    assert (r.output_tokens, r.thinking_tokens) == (80, 50)
+
+
+@pytest.mark.anyio
+async def test_a_call_that_fails_before_streaming_adds_no_usage(store, embedder):
+    client = scripted_client(busy(), [text_chunk("Hello! Ask me about AUB."), usage_chunk(300, 10)])
+    turn = make_turn(client, store, embedder)
+
+    await collect(turn, [("user", "Hi")])
+
+    assert (turn.result.model_calls, turn.result.input_tokens) == (1, 300)

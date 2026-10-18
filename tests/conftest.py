@@ -91,6 +91,20 @@ def call_chunk(name: str, args: dict, call_id: str = "call-1") -> types.Generate
     )
 
 
+def usage_chunk(
+    prompt: int, output: int, *, thoughts: int | None = None, cached: int | None = None
+) -> types.GenerateContentResponse:
+    """The usage report Gemini sends with the last chunk of a streamed call."""
+    return types.GenerateContentResponse(
+        usage_metadata=types.GenerateContentResponseUsageMetadata(
+            prompt_token_count=prompt,
+            candidates_token_count=output,
+            thoughts_token_count=thoughts,
+            cached_content_token_count=cached,
+        )
+    )
+
+
 def busy(code: int = 503) -> genai_errors.APIError:
     return genai_errors.APIError(code, {"error": {"code": code, "message": "overloaded"}})
 

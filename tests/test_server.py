@@ -3,7 +3,7 @@ import uuid
 
 import httpx
 import pytest
-from conftest import busy, call_chunk, local_source, scripted_client, text_chunk
+from conftest import busy, call_chunk, local_source, scripted_client, text_chunk, usage_chunk
 from fastapi.testclient import TestClient
 
 from chatbot.ingest import Refresher
@@ -112,6 +112,23 @@ def test_answered_turn_is_logged_without_the_raw_ip(harness):
     assert "203.0.113.9" not in json.dumps(row)
     assert row["index_version"] == h.refresher.store.meta["content_sha"]
     assert (row["session_id"], row["lang"], row["model"]) == ("s1", "en", "gemini-2.5-flash-lite")
+
+
+def test_token_usage_is_logged_and_printed_for_every_turn(harness, capsys):
+    h = harness(
+        [call_chunk("search", {"query": "AUB tuition per credit"}), usage_chunk(900, 20)],
+        [text_chunk(ANSWER), usage_chunk(1500, 60, thoughts=40)],
+    )
+
+    turn_id = events(h.chat())[0][1]["turn_id"]
+
+    [row] = h.rows()
+    assert (row["model_calls"], row["input_tokens"], row["cached_tokens"]) == (2, 2400, 0)
+    assert (row["output_tokens"], row["thinking_tokens"]) == (80, 40)
+    assert (
+        f"[turn] {turn_id} model=gemini-2.5-flash-lite outcome=answered model_calls=2 "
+        "input_tokens=2400 cached_tokens=0 output_tokens=80 thinking_tokens=40"
+    ) in capsys.readouterr().out
 
 
 def test_off_topic_question_gets_the_refusal_in_the_users_language(harness):

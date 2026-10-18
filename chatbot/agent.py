@@ -91,6 +91,22 @@ class TurnResult:
     top_score: float | None = None
     error: str | None = None
     latency_ms: int = 0
+    # Token usage summed over every model call in the turn (each call resends
+    # the history, so input grows with each tool round). Output excludes thinking.
+    model_calls: int = 0
+    input_tokens: int = 0
+    cached_tokens: int = 0
+    output_tokens: int = 0
+    thinking_tokens: int = 0
+
+    def add_usage(self, usage: types.GenerateContentResponseUsageMetadata | None) -> None:
+        self.model_calls += 1
+        if usage is None:
+            return
+        self.input_tokens += usage.prompt_token_count or 0
+        self.cached_tokens += usage.cached_content_token_count or 0
+        self.output_tokens += usage.candidates_token_count or 0
+        self.thinking_tokens += usage.thoughts_token_count or 0
 
 
 class ChatTurn:
@@ -140,11 +156,14 @@ class ChatTurn:
                     parts: list[types.Part] = []
                     calls: list[types.FunctionCall] = []
                     gate = _SentinelGate()
+                    usage = None
                     try:
                         stream = await self._client.aio.models.generate_content_stream(
                             model=self.model, contents=history, config=request_config
                         )
                         async for chunk in stream:
+                            # Each chunk reports the call's running total; keep the last.
+                            usage = chunk.usage_metadata or usage
                             for part in _parts(chunk):
                                 parts.append(part)
                                 if part.function_call:
@@ -155,8 +174,11 @@ class ChatTurn:
                                         sent_text = True
                                         shown += released
                                         yield "delta", {"text": released}
+                        self.result.add_usage(usage)
                         break
                     except genai_errors.APIError as exc:
+                        if usage:  # failed part-way; what streamed is still billed
+                            self.result.add_usage(usage)
                         if exc.code not in RETRYABLE_CODES or sent_text:
                             raise
                         if attempt == 1:
