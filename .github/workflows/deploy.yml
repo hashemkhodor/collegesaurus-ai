@@ -37,6 +37,19 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       - uses: superfly/flyctl-actions/setup-flyctl@master
+      # Chat runs on Claude Haiku when the ANTHROPIC_API_KEY repo secret exists;
+      # otherwise nothing changes and chat stays on Gemini. The key is staged as a
+      # Fly secret and goes live with the deploy below (embeddings still use Gemini).
+      - name: Stage the Anthropic key and switch chat to Claude
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            flyctl secrets set --stage ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" CHAT_PROVIDER=claude
+          else
+            echo "ANTHROPIC_API_KEY not set: chat stays on Gemini"
+          fi
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       # One machine: without --ha=false, a deploy to an app that has no
       # machines (a new app, or after they were removed) creates two.
       - run: flyctl deploy --remote-only --ha=false

@@ -8,6 +8,7 @@ import shutil
 from pathlib import Path
 from types import SimpleNamespace
 
+import anthropic
 import numpy as np
 import pytest
 from google.genai import errors as genai_errors
@@ -123,3 +124,72 @@ class ScriptedModels:
 
 def scripted_client(*scripts):
     return SimpleNamespace(aio=SimpleNamespace(models=ScriptedModels(scripts)))
+
+
+# --- Anthropic streaming API stand-ins (external service) --------------------
+
+
+def claude_text(text: str) -> SimpleNamespace:
+    return SimpleNamespace(type="text", text=text)
+
+
+def claude_call(name: str, args: dict, call_id: str = "toolu-1") -> SimpleNamespace:
+    return SimpleNamespace(type="tool_use", id=call_id, name=name, input=args)
+
+
+def claude_busy(status: int = 529) -> anthropic.APIStatusError:
+    import httpx2
+
+    response = httpx2.Response(status, request=httpx2.Request("POST", "https://api.anthropic.test"))
+    return anthropic.APIStatusError("overloaded", response=response, body=None)
+
+
+class FakeClaudeStream:
+    def __init__(self, blocks, stop_reason):
+        self._blocks = blocks
+        self._stop_reason = stop_reason
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    @property
+    def text_stream(self):
+        async def texts():
+            for block in self._blocks:
+                if isinstance(block, Exception):
+                    raise block
+                if block.type == "text":
+                    yield block.text
+
+        return texts()
+
+    async def get_final_message(self):
+        blocks = [b for b in self._blocks if not isinstance(b, Exception)]
+        stop = "tool_use" if any(b.type == "tool_use" for b in blocks) else self._stop_reason
+        return SimpleNamespace(content=blocks, stop_reason=stop)
+
+
+class ScriptedClaude:
+    """Stands in for AsyncAnthropic.messages: each .stream() call plays the next script.
+
+    A script is a list of content blocks (an exception in the list is raised
+    mid-stream), or an exception raised when the stream is opened.
+    """
+
+    def __init__(self, scripts):
+        self.scripts = list(scripts)
+        self.requests = []
+
+    def stream(self, **kwargs):
+        self.requests.append({**kwargs, "messages": list(kwargs["messages"])})
+        script = self.scripts.pop(0)
+        if isinstance(script, Exception):
+            raise script
+        return FakeClaudeStream(script, "end_turn")
+
+
+def scripted_claude(*scripts):
+    return SimpleNamespace(messages=ScriptedClaude(scripts))

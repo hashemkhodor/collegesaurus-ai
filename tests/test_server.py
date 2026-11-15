@@ -3,7 +3,16 @@ import uuid
 
 import httpx
 import pytest
-from conftest import busy, call_chunk, local_source, scripted_client, text_chunk
+from conftest import (
+    busy,
+    call_chunk,
+    claude_call,
+    claude_text,
+    local_source,
+    scripted_claude,
+    scripted_client,
+    text_chunk,
+)
 from fastapi.testclient import TestClient
 
 from chatbot.ingest import Refresher
@@ -19,7 +28,9 @@ ANSWER = f"AUB charges **$1,000 per credit** for engineering ([AUB]({AUB_URL})).
 class Harness:
     """The real app with fakes only for Gemini, Supabase and the clock."""
 
-    def __init__(self, corpus_dir, embedder, tmp_path, scripts, *, limits=None, loaded=True):
+    def __init__(
+        self, corpus_dir, embedder, tmp_path, scripts, *, limits=None, loaded=True, claude=False
+    ):
         self.now = 1000.0
         self.refresher = Refresher(
             [local_source(corpus_dir)], embedder, None, clock=lambda: self.now, stale_after=600
@@ -39,6 +50,7 @@ class Harness:
             client=httpx.AsyncClient(transport=httpx.MockTransport(supabase)),
         )
         self.gemini = scripted_client(*scripts)
+        self.claude = scripted_claude(*scripts) if claude else None
         web = tmp_path / "web"
         web.mkdir()
         (web / "index.html").write_text("<!doctype html><title>Collegesaurus AI</title>")
@@ -51,7 +63,10 @@ class Harness:
             page_types=CollegesaurusCorpus.types,
             limiter=RateLimiter(clock=lambda: self.now),
             limits=limits or Limits(),
-            model="gemini-2.5-flash-lite",
+            model="claude-haiku-5-5" if claude else "gemini-2.5-flash-lite",
+            chat_provider="claude" if claude else "gemini",
+            claude_client=self.claude,
+            top_k=3 if claude else 15,
         )
         self.client = TestClient(create_app(services, web_dir=web, background=False))
 
@@ -91,6 +106,25 @@ def test_chat_streams_meta_status_answer_sources_and_done(harness):
     assert got[2][1] == {"text": ANSWER}
     assert got[3][1] == {"items": [{"title": AUB_TITLE, "url": AUB_URL}]}
     assert got[4][1] == {"turn_id": got[0][1]["turn_id"], "outcome": "answered"}
+
+
+def test_claude_provider_answers_with_haiku_and_logs_the_model(harness):
+    h = harness(
+        [claude_call("search", {"query": "AUB tuition per credit"})],
+        [claude_text(ANSWER)],
+        claude=True,
+    )
+
+    got = events(h.chat())
+
+    assert [kind for kind, _ in got] == ["meta", "status", "delta", "sources", "done"]
+    assert got[2][1] == {"text": ANSWER}
+    assert h.gemini.aio.models.requests == []  # chat never touched Gemini
+    request = h.claude.messages.requests[0]
+    assert request["model"] == "claude-haiku-5-5"
+    assert "Call tools directly" in request["system"]
+    [row] = h.rows()
+    assert (row["outcome"], row["model"]) == ("answered", "claude-haiku-5-5")
 
 
 def test_answered_turn_is_logged_without_the_raw_ip(harness):

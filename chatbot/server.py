@@ -35,6 +35,7 @@ from starlette.background import BackgroundTask
 
 from chatbot import config
 from chatbot.agent import ChatTurn, system_prompt
+from chatbot.agent_claude import PROMPT_SUFFIX, ClaudeChatTurn
 from chatbot.ingest import Embedder, GeminiEmbedder, Refresher
 from chatbot.logging_store import ChatLogger
 from chatbot.store import Page, SqliteNumpyStore
@@ -147,6 +148,9 @@ class Services:
     limiter: RateLimiter = field(default_factory=RateLimiter)
     limits: Limits = field(default_factory=Limits)
     model: str = config.GEMINI_CHAT_MODEL
+    chat_provider: str = "gemini"  # "claude" answers with Claude Haiku via `claude_client`
+    claude_client: object | None = None  # anthropic.AsyncAnthropic
+    top_k: int = config.TOP_K
 
 
 @dataclass(frozen=True)
@@ -276,14 +280,22 @@ def create_app(
 
         page = body.page if body.page and len(body.page) <= 300 else None
         runner = ToolRunner(
-            store, s.embedder.embed_query, s.page_types, locale=question_locale(question)
+            store,
+            s.embedder.embed_query,
+            s.page_types,
+            locale=question_locale(question),
+            top_k=s.top_k,
         )
-        turn = ChatTurn(
-            s.genai_client,
-            runner,
-            system_instruction=system_prompt(s.page_types, _page_for(store, page)),
-            model=s.model,
-        )
+        instruction = system_prompt(s.page_types, _page_for(store, page))
+        if s.chat_provider == "claude":
+            turn = ClaudeChatTurn(
+                s.claude_client,
+                runner,
+                system_instruction=instruction + PROMPT_SUFFIX,
+                model=s.model,
+            )
+        else:
+            turn = ChatTurn(s.genai_client, runner, system_instruction=instruction, model=s.model)
         context = _Turn(
             turn_id=str(uuid.uuid4()),
             session_id=body.session_id,
@@ -480,10 +492,17 @@ def _production_services() -> Services:
     embedder = GeminiEmbedder(client)
     store = SqliteNumpyStore.load(config.INDEX_PATH) if config.INDEX_PATH.exists() else None
     sources = config.sources()
+    if config.CHAT_PROVIDER not in ("gemini", "claude"):
+        raise RuntimeError(f"CHAT_PROVIDER must be gemini or claude, not {config.CHAT_PROVIDER!r}")
+    claude = config.CHAT_PROVIDER == "claude"
     return Services(
         refresher=Refresher(sources, embedder, store),
         embedder=embedder,
         genai_client=client,
+        chat_provider=config.CHAT_PROVIDER,
+        claude_client=config.anthropic_client() if claude else None,
+        model=config.CLAUDE_CHAT_MODEL if claude else config.GEMINI_CHAT_MODEL,
+        top_k=config.CLAUDE_TOP_K if claude else config.TOP_K,
         logger=ChatLogger(config.SUPABASE_URL, config.SUPABASE_SECRET_KEY, config.IP_HASH_SECRET),
         page_types={kind: about for source in sources for kind, about in source.types.items()},
     )
