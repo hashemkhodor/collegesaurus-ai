@@ -83,6 +83,7 @@ class ClaudeChatTurn:
                                     shown += released
                                     yield "delta", {"text": released}
                             final = await stream.get_final_message()
+                        _add_usage(self.result, final)
                         break
                     except anthropic.APIStatusError as exc:
                         if exc.status_code not in RETRYABLE_CODES or sent_text:
@@ -148,3 +149,20 @@ class ClaudeChatTurn:
                 self.result.answer = shown.strip()  # aborted or failed part-way
             self.result.top_score = self._runner.top_score
             self.result.latency_ms = int((time.perf_counter() - started) * 1000)
+
+
+def _add_usage(result: TurnResult, message) -> None:
+    """Fold one response's usage into the turn's totals (same columns as Gemini).
+
+    `input_tokens` counts cached input too, as Gemini's does. Claude reports
+    output tokens with thinking included, so `thinking_tokens` stays 0.
+    """
+    result.model_calls += 1
+    usage = getattr(message, "usage", None)
+    if usage is None:
+        return
+    cached = getattr(usage, "cache_read_input_tokens", 0) or 0
+    written = getattr(usage, "cache_creation_input_tokens", 0) or 0
+    result.input_tokens += (usage.input_tokens or 0) + cached + written
+    result.cached_tokens += cached
+    result.output_tokens += usage.output_tokens or 0

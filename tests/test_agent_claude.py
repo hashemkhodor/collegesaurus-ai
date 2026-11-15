@@ -58,6 +58,22 @@ async def test_searches_then_streams_the_answer_with_its_cited_sources(store, em
 
 
 @pytest.mark.anyio
+async def test_token_usage_is_summed_over_the_turn(store, embedder):
+    client = scripted_claude(
+        [claude_call("search", {"query": "AUB tuition"})],
+        [claude_text("AUB charges $1,000 per credit, according to its page.")],
+    )
+    turn = make_turn(client, store, embedder)
+
+    await collect(turn)
+
+    result = turn.result
+    assert result.model_calls == 2
+    assert result.input_tokens == 2 * (100 + 20)  # cached input counts, as with Gemini
+    assert (result.cached_tokens, result.output_tokens, result.thinking_tokens) == (40, 60, 0)
+
+
+@pytest.mark.anyio
 async def test_request_is_cheap_and_declares_the_tools(store, embedder):
     client = scripted_claude([claude_text("Hello! What would you like to know?" * 3)])
 

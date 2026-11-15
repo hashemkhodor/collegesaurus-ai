@@ -3,7 +3,17 @@ import uuid
 
 import httpx
 import pytest
-from conftest import busy, call_chunk, local_source, scripted_client, text_chunk, usage_chunk
+from conftest import (
+    busy,
+    call_chunk,
+    claude_call,
+    claude_text,
+    local_source,
+    scripted_claude,
+    scripted_client,
+    text_chunk,
+    usage_chunk,
+)
 from fastapi.testclient import TestClient
 
 from chatbot.ingest import Refresher

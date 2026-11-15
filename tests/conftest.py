@@ -183,7 +183,13 @@ class FakeClaudeStream:
     async def get_final_message(self):
         blocks = [b for b in self._blocks if not isinstance(b, Exception)]
         stop = "tool_use" if any(b.type == "tool_use" for b in blocks) else self._stop_reason
-        return SimpleNamespace(content=blocks, stop_reason=stop)
+        usage = SimpleNamespace(
+            input_tokens=100,
+            cache_read_input_tokens=20,
+            cache_creation_input_tokens=0,
+            output_tokens=30,
+        )
+        return SimpleNamespace(content=blocks, stop_reason=stop, usage=usage)
 
 
 class ScriptedClaude:
