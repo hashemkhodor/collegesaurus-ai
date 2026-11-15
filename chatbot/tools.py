@@ -65,6 +65,36 @@ def tool_declarations(page_types: dict[str, str]) -> list[types.FunctionDeclarat
     ]
 
 
+def claude_tool_declarations(page_types: dict[str, str]) -> list[dict]:
+    """The same two tools in the Anthropic tool format (descriptions come from the Gemini ones)."""
+    about = {d.name: d.description for d in tool_declarations(page_types)}
+    type_param = {
+        "type": "string",
+        "enum": list(page_types),
+        "description": "Only this kind of page. "
+        + " ".join(f"{kind}: {text}" for kind, text in page_types.items()),
+    }
+    return [
+        {
+            "name": "search",
+            "description": about["search"],
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "What to look for."},
+                    "type": type_param,
+                },
+                "required": ["query"],
+            },
+        },
+        {
+            "name": "list_pages",
+            "description": about["list_pages"],
+            "input_schema": {"type": "object", "properties": {"type": type_param}},
+        },
+    ]
+
+
 class ToolRunner:
     """Runs one turn's tool calls against the index and remembers what they found."""
 

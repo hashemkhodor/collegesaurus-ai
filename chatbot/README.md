@@ -10,7 +10,7 @@ running until cutover. The design and the reasons behind it are in
 collegesaurus site build ──► /chatbot/corpus.json (en, ar) + /chatbot/version.json
                                           │  polled every 60 s
                                           ▼
- chat page (web/) ◄──SSE── server.py ── agent.py (Gemini tool loop) ── tools.py
+ chat page (web/) ◄──SSE── server.py ── agent.py (Gemini) or agent_claude.py (Haiku) ── tools.py
                               │                                           │
                               └─ logging_store.py → Supabase     store.py (SQLite + numpy)
                                                                           ▲
@@ -99,6 +99,22 @@ The collegesaurus plugin `plugins/chatbot-corpus/` writes these files at build t
 Other rate limits are set in `config.py`: 10 turns per 30 s per browser session, and
 30 per minute per IP.
 
+## Chat on Claude Haiku
+
+`CHAT_PROVIDER=claude` swaps only the chat model. Search is unchanged: Gemini
+embeddings and the same index, so both keys are needed. `agent_claude.py` runs the
+same tool loop and emits the same events as `agent.py`.
+
+Why it is cheap: Haiku 5.5 ($0.10 / $0.50 per million tokens), effort `low`, an
+output cap of 2048 tokens, no forced tool use, and 8 passages per search instead of 15.
+Every turn logs its `model` in Supabase, so compare the two providers there.
+
+In CI the **Deploy** workflow does the switch: add the GitHub secret
+`ANTHROPIC_API_KEY` and the next deploy stages it as a Fly secret and sets
+`CHAT_PROVIDER=claude`. Without the secret nothing changes. To go back, run
+`fly secrets set CHAT_PROVIDER=gemini` and delete the GitHub secret, or the next deploy
+switches it to Claude again.
+
 ## Deploy (Fly.io, one-time setup)
 
 0. First the site has to publish the corpus: merge the collegesaurus branch that adds
@@ -109,7 +125,7 @@ Other rate limits are set in `config.py`: 10 turns per 30 s per browser session,
    `fly secrets set GEMINI_API_KEY=… SUPABASE_URL=… SUPABASE_SECRET_KEY=… IP_HASH_SECRET=$(openssl rand -hex 32)`
 3. Run [`supabase/chat_logs.sql`](../supabase/chat_logs.sql) in the Supabase SQL editor.
 4. In GitHub (Settings → Secrets and variables → Actions) for this repo:
-   - add the secrets `GEMINI_API_KEY` and `FLY_API_TOKEN` (from `fly tokens create deploy -a collegesaurus-ai`);
+   - add the secrets `GEMINI_API_KEY` and `FLY_API_TOKEN` (from `fly tokens create deploy -a collegesaurus-ai`), and optionally `ANTHROPIC_API_KEY` for Claude chat;
    - add the variable `FLY_DEPLOY_ENABLED` = `true`.
 5. Run the **Deploy chatbot to Fly.io** workflow. It builds the index snapshot, bakes it
    into the image and deploys. Check `https://collegesaurus-ai.fly.dev/healthz`.

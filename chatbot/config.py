@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import anthropic
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -34,6 +35,15 @@ EMBED_DIM = 768
 TOP_K = 15
 MAX_STEPS = 6  # model calls per answer, tool calls included
 MAX_OUTPUT_TOKENS = 8192
+
+# Chat backend: "gemini" (default) or "claude". Embeddings are Gemini either way.
+CHAT_PROVIDER = os.environ.get("CHAT_PROVIDER", "gemini").strip().lower()
+# Claude Haiku 5.5: the cheapest Claude with tool use ($0.10 / $0.50 per million tokens).
+CLAUDE_CHAT_MODEL = os.environ.get("ANTHROPIC_CHAT_MODEL", "claude-haiku-5-5")
+CLAUDE_EFFORT = os.environ.get("CHAT_EFFORT", "low")  # Haiku thinks by default; low keeps it cheap
+CLAUDE_MAX_OUTPUT_TOKENS = 2048  # answers are short; thinking tokens count against this too
+CLAUDE_TOP_K = int(os.environ.get("CHAT_TOP_K", "8"))  # passages per search: the main input cost
+CLAUDE_TIMEOUT_SECONDS = 30.0
 
 POLL_SECONDS = 60  # how often to check the site's version.json
 STALE_AFTER_SECONDS = 600  # /healthz reports stale after this long without a good poll
@@ -72,6 +82,14 @@ def gemini_client() -> genai.Client:
     return genai.Client(
         api_key=gemini_api_key(), http_options=types.HttpOptions(timeout=GEMINI_TIMEOUT_MS)
     )
+
+
+def anthropic_client() -> anthropic.AsyncAnthropic:
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        raise RuntimeError(
+            "CHAT_PROVIDER=claude needs ANTHROPIC_API_KEY (https://console.anthropic.com/)."
+        )
+    return anthropic.AsyncAnthropic(timeout=CLAUDE_TIMEOUT_SECONDS, max_retries=1)
 
 
 def sources() -> list[Source]:
