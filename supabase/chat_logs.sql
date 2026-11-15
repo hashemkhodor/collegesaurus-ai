@@ -27,7 +27,13 @@ alter table public.chat_logs
   add column if not exists page text,           -- site page the chat was opened from
   add column if not exists model text,
   add column if not exists index_version text,  -- content_sha of the index that answered
-  add column if not exists ip_hmac text;        -- keyed hash of the client IP, never the IP
+  add column if not exists ip_hmac text,        -- keyed hash of the client IP, never the IP
+  -- Token usage summed over the turn's model calls; output excludes thinking.
+  add column if not exists model_calls integer,
+  add column if not exists input_tokens integer,
+  add column if not exists cached_tokens integer,
+  add column if not exists output_tokens integer,
+  add column if not exists thinking_tokens integer;
 
 -- Thumbs up / down. Insert-only and keyed by turn_id; no foreign key, because
 -- feedback can arrive before the turn's log row is written.
